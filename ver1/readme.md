@@ -5,3 +5,7 @@ run
 
 На основе:
 - https://github.com/bpmbpm/mdld-test/blob/main/ver2/index.html
+
+Не нужны:
+- app.js
+- modules/
