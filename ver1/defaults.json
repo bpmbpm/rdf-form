@@ -1,0 +1,18 @@
+{
+  "original": [
+    {
+      "label": "example1/test1.md (bpmbpm/onto)",
+      "url": "https://github.com/bpmbpm/onto/blob/main/example1/test1.md"
+    },
+    {
+      "label": "example1/test2.md",
+      "url": "https://github.com/bpmbpm/onto/blob/main/example1/test2.md"
+    }
+  ],
+  "sparql": [
+    {
+      "label": "01-all-triples.rq",
+      "url": "https://github.com/bpmbpm/mdld-test/blob/main/ver2/SPARQL/01-all-triples.rq"
+    }
+  ]
+}
