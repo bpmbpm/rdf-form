@@ -5,102 +5,61 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>RDF Browser Toolkit</title>
 <style>
-:root{
-  --bg:#0f1216;--panel:#171b21;--panel-2:#1e232b;--border:#2a313b;
-  --fg:#d7dde5;--muted:#8892a1;--accent:#4a9eff;
-  --mono:ui-monospace,Menlo,Consolas,monospace;
-}
+:root{--bg:#0f1216;--panel:#171b21;--panel-2:#1e232b;--border:#2a313b;
+--fg:#d7dde5;--muted:#8892a1;--accent:#4a9eff;--mono:ui-monospace,Menlo,Consolas,monospace}
 *{box-sizing:border-box}html,body{height:100%;margin:0}
 body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--fg);
-     display:flex;flex-direction:column;min-height:100vh}
-
+display:flex;flex-direction:column;min-height:100vh}
 header{display:flex;align-items:center;gap:12px;padding:8px 16px;
-       border-bottom:1px solid var(--border);background:var(--panel)}
+border-bottom:1px solid var(--border);background:var(--panel)}
 header h1{font-size:16px;margin:0;flex:1}
 header button{background:var(--panel-2);border:1px solid var(--border);
-              color:var(--fg);padding:6px 12px;border-radius:6px;cursor:pointer}
+color:var(--fg);padding:6px 12px;border-radius:6px;cursor:pointer}
 header button:hover{border-color:var(--accent)}
-
-/* ============ ГЛАВНОЕ: вертикальный ресайз рядов ============ */
-main{
-  flex:1;
-  display:flex;
-  flex-direction:column;
-  gap:8px;
-  padding:8px;
-  min-height:0;
-  overflow-y:auto;         /* если ряды вылезут за экран — прокрутка */
-}
-
-.row{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:8px;
-  min-height:180px;
-  height:300px;              /* начальная высота */
-  resize:vertical;           /* ← мышью за нижний правый угол */
-  overflow:hidden;           /* ← обязательно для работы resize */
-  flex:0 0 auto;             /* не тянется сам, использует height */
-}
-
-.row-log{
-  display:grid;
-  grid-template-columns:1fr;
-  gap:8px;
-  min-height:100px;
-  height:160px;
-  resize:vertical;
-  overflow:hidden;
-  flex:0 0 auto;
-}
-/* ========================================================= */
-
+main{flex:1;display:flex;flex-direction:column;gap:8px;padding:8px;
+min-height:0;overflow-y:auto}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px;min-height:180px;
+height:300px;resize:vertical;overflow:hidden;flex:0 0 auto}
+.row-log{display:grid;grid-template-columns:1fr;gap:8px;min-height:100px;
+height:160px;resize:vertical;overflow:hidden;flex:0 0 auto}
 .pane{display:flex;flex-direction:column;background:var(--panel);
-      border:1px solid var(--border);border-radius:8px;
-      min-height:0;overflow:hidden}
+border:1px solid var(--border);border-radius:8px;min-height:0;overflow:hidden}
 .pane-header{display:flex;justify-content:space-between;align-items:center;
-             padding:6px 10px;background:var(--panel-2);
-             border-bottom:1px solid var(--border);font-size:13px;
-             color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+padding:6px 10px;background:var(--panel-2);border-bottom:1px solid var(--border);
+font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
 .pane-header button{background:transparent;color:var(--muted);
-                    border:1px solid var(--border);border-radius:4px;
-                    padding:2px 8px;cursor:pointer;font-size:12px}
+border:1px solid var(--border);border-radius:4px;padding:2px 8px;cursor:pointer;font-size:12px}
 .pane-toolbar{display:flex;flex-wrap:wrap;gap:4px;padding:6px;
-              border-bottom:1px solid var(--border);background:#141920}
-.pane-toolbar input[type="url"]{flex:1 1 200px;min-width:120px;
-  background:var(--bg);border:1px solid var(--border);color:var(--fg);
-  padding:4px 8px;border-radius:4px;font-family:var(--mono);font-size:12px}
+border-bottom:1px solid var(--border);background:#141920}
+.pane-toolbar input[type="url"]{flex:1 1 200px;min-width:120px;background:var(--bg);
+border:1px solid var(--border);color:var(--fg);padding:4px 8px;border-radius:4px;
+font-family:var(--mono);font-size:12px}
 .pane-toolbar select,.pane-toolbar button{background:var(--panel-2);
-  border:1px solid var(--border);color:var(--fg);padding:4px 10px;
-  border-radius:4px;cursor:pointer;font-size:12px}
+border:1px solid var(--border);color:var(--fg);padding:4px 10px;border-radius:4px;
+cursor:pointer;font-size:12px}
 .pane-toolbar button:hover{border-color:var(--accent)}
 .pane-toolbar select{max-width:320px}
-
 .code-view,.log-view{flex:1;margin:0;overflow:auto;padding:10px 12px;
-  font-family:var(--mono);font-size:12.5px;line-height:1.5;
-  white-space:pre;min-height:0}
+font-family:var(--mono);font-size:12.5px;line-height:1.5;white-space:pre;min-height:0}
 .code-view code{font-family:inherit}
 .log-view{background:#0b0e12;font-size:11.5px;color:#b6c0cd}
-
 .tok-comment{color:#6a7a8a;font-style:italic}.tok-prefix{color:#c586c0}
 .tok-keyword{color:#569cd6;font-weight:600}.tok-iri{color:#4ec9b0}
 .tok-pname{color:#dcdcaa}.tok-string{color:#ce9178}.tok-number{color:#b5cea8}
 .tok-punct{color:#808a96}.tok-variable{color:#9cdcfe}.tok-lang{color:#4ec9b0}
 .tok-blank{color:#d19a66}
-
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;
-       align-items:center;justify-content:center;z-index:100}
+align-items:center;justify-content:center;z-index:100}
 .modal.hidden{display:none}
 .modal-content{background:var(--panel);border:1px solid var(--border);
-  border-radius:8px;max-width:900px;max-height:85vh;width:90%;
-  overflow:auto;padding:24px 32px;position:relative}
+border-radius:8px;max-width:900px;max-height:85vh;width:90%;overflow:auto;
+padding:24px 32px;position:relative}
 .modal-close{position:absolute;top:8px;right:12px;background:transparent;
-  border:none;font-size:24px;color:var(--muted);cursor:pointer}
+border:none;font-size:24px;color:var(--muted);cursor:pointer}
 .markdown-body{line-height:1.6}
-.markdown-body code{background:var(--panel-2);padding:2px 5px;
-  border-radius:3px;font-family:var(--mono);font-size:90%}
-.markdown-body pre{background:var(--panel-2);padding:12px;
-  border-radius:6px;overflow:auto}
+.markdown-body code{background:var(--panel-2);padding:2px 5px;border-radius:3px;
+font-family:var(--mono);font-size:90%}
+.markdown-body pre{background:var(--panel-2);padding:12px;border-radius:6px;overflow:auto}
 ::-webkit-scrollbar{width:10px;height:10px}
 ::-webkit-scrollbar-thumb{background:#2a313b;border-radius:5px}
 </style>
@@ -108,10 +67,11 @@ main{
 <script type="importmap">
 {
   "imports": {
-    "n3":       "https://cdn.jsdelivr.net/npm/n3@1.17.2/+esm",
-    "jsonld":   "https://cdn.jsdelivr.net/npm/jsonld@8.3.2/+esm",
-    "js-yaml":  "https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/+esm",
-    "oxigraph": "https://esm.sh/oxigraph@0.4.0-beta.4/web.js"
+    "n3":       "https://cdn.jsdelivr.net/npm/n3@latest/+esm",
+    "jsonld":   "https://cdn.jsdelivr.net/npm/jsonld@latest/+esm",
+    "js-yaml":  "https://cdn.jsdelivr.net/npm/js-yaml@latest/+esm",
+    "oxigraph": "https://cdn.jsdelivr.net/npm/oxigraph@latest/web.js",
+    "sparqljs": "https://cdn.jsdelivr.net/npm/sparqljs@latest/+esm"
   }
 }
 </script>
@@ -129,7 +89,7 @@ main{
       <div class="pane-header"><label>Original (Turtle)</label></div>
       <div class="pane-toolbar">
         <input id="url-original" type="url" placeholder="URL Turtle"
-               value="https://github.com/bpmbpm/onto/blob/main/example1/test1.md" />
+               value="files/test1.ttl" />
         <button id="btn-load-url-original">Загрузить</button>
         <select id="sel-default-original"><option>— по умолчанию —</option></select>
         <button id="btn-load-buffer-original">Из буфера</button>
@@ -166,7 +126,7 @@ main{
       <div class="pane-header"><label>SPARQL</label></div>
       <div class="pane-toolbar">
         <input id="url-sparql" type="url" placeholder="URL SPARQL"
-               value="https://github.com/bpmbpm/mdld-test/blob/main/ver2/SPARQL/01-all-triples.rq" />
+               value="files/test1.rq" />
         <button id="btn-load-url-sparql">Загрузить</button>
         <select id="sel-default-sparql"><option>— по умолчанию —</option></select>
         <button id="btn-load-buffer-sparql">Из буфера</button>
@@ -206,10 +166,7 @@ main{
 
 <script type="module">
 // ============================================================
-// 0. ЛОГИРОВАНИЕ И ПЕРЕХВАТ ОШИБОК
-//    "Логические метки" (app.js, parser.js...) — это текстовые
-//    ярлыки. Реальных файлов с такими именами в проекте НЕТ.
-//    Всё живёт в этом одном index.html.
+// 0. ЛОГИРОВАНИЕ
 // ============================================================
 const $ = id => document.getElementById(id);
 
@@ -221,8 +178,6 @@ function _log(level, module, library, message) {
   const c = level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log';
   console[c](line.trimEnd());
 }
-
-// Фабрика логгеров: L.parser.info(msg, lib)
 function mkLogger(mod) {
   return {
     info:  (m, l='') => _log('info',  mod, l, m),
@@ -232,31 +187,27 @@ function mkLogger(mod) {
   };
 }
 const L = {
-  app:         mkLogger('app.js'),
-  loader:      mkLogger('loader.js'),
-  parser:      mkLogger('parser.js'),
-  serializer:  mkLogger('serializer.js'),
-  sparql:      mkLogger('sparql.js'),
-  highlighter: mkLogger('highlighter.js'),
-  clipboard:   mkLogger('clipboard.js'),
-  help:        mkLogger('help.js'),
+  app:        mkLogger('app.js'),
+  loader:     mkLogger('loader.js'),
+  parser:     mkLogger('parser.js'),
+  serializer: mkLogger('serializer.js'),
+  sparql:     mkLogger('sparql.js'),
 };
 
 window.addEventListener('error', e => {
-  _log('error', 'window', '',
-       e.message + (e.filename ? ` @ ${e.filename}:${e.lineno}` : ''));
+  _log('error', 'window', '', e.message + (e.filename ? ` @ ${e.filename}:${e.lineno}` : ''));
 });
 window.addEventListener('unhandledrejection', e => {
   const r = e.reason;
   _log('error', 'promise', '', (r && r.message) ? r.message : String(r));
 });
 
-L.app.info('─── Модуль загружен, начинаем инициализацию ───');
+L.app.info('─── Модуль загружен ───');
 
 // ============================================================
-// 1. ИМПОРТ БИБЛИОТЕК
+// 1. ИМПОРТ БИБЛИОТЕК (схема из mdld-test/ver2)
 // ============================================================
-let N3, jsonld, yaml, oxigraph, oxigraphInit;
+let N3, jsonld, yaml, oxigraph, sparqljs;
 
 try {
   N3 = await import('n3');
@@ -275,17 +226,21 @@ try {
   L.app.info('js-yaml загружен', 'import');
 } catch (e) { L.app.error('js-yaml: ' + e.message, 'import'); }
 
-// ---- Oxigraph: web.js + явный init ----
+// --- Oxigraph: рабочий способ из mdld-test/ver2 ---
 try {
-  const ox = await import('oxigraph');
-  // esm.sh/web.js отдаёт default = init(), и именованные экспорты
-  oxigraphInit = ox.default;
-  if (typeof oxigraphInit !== 'function') oxigraphInit = ox.init;
-  oxigraph = ox;
-  L.app.info('oxigraph загружен (web.js)', 'import');
-} catch (e) {
-  L.app.error('oxigraph: ' + e.message, 'import');
-}
+  L.app.info('Загрузка oxigraph WASM…', 'import');
+  const oxMod = await import('oxigraph');
+  await oxMod.default();          // ← ключевой вызов init()
+  oxigraph = oxMod;
+  L.app.info('oxigraph инициализирован ✓', 'import');
+} catch (e) { L.app.error('oxigraph: ' + e.message, 'import'); }
+
+// --- sparqljs для валидации SPARQL ---
+try {
+  const s = await import('sparqljs');
+  sparqljs = s.default || s;
+  L.app.info('sparqljs загружен', 'import');
+} catch (e) { L.app.error('sparqljs: ' + e.message, 'import'); }
 
 // ============================================================
 // 2. ПОДСВЕТКА СИНТАКСИСА
@@ -300,13 +255,12 @@ const RE = {
   variable: /[?$][A-Za-z_][\w-]*/y,
   prefixKw: /@prefix|@base|PREFIX|BASE/y,
   pname:    /[A-Za-z_][\w-]*:[A-Za-z_][\w.-]*/y,
-  keyword:  /\b(a|true|false)\b/y,
+  keyword:  /\b(a|true|false|SELECT|WHERE|FILTER|ORDER|BY|LIMIT|OFFSET|DISTINCT|OPTIONAL|UNION|BIND|AS)\b/y,
   number:   /[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/y,
   punct:    /[.;,()\[\]{}]/y,
   word:     /[A-Za-z_][\w-]*|./y,
 };
 const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-
 function classify(src, i) {
   for (const [name, cls] of [
     ['comment','tok-comment'],['ws',null],['string','tok-string'],['iri','tok-iri'],
@@ -367,7 +321,7 @@ function downloadFile(name, text, mime='text/plain;charset=utf-8') {
 }
 
 // ============================================================
-// 4. ПАРСЕР TURTLE
+// 4. ПАРСЕР + ВАЛИДАЦИЯ TURTLE
 // ============================================================
 function parseTurtle(text, baseIRI='http://example.org/') {
   if (!N3) throw new Error('N3.js не загружен');
@@ -382,27 +336,40 @@ function parseTurtle(text, baseIRI='http://example.org/') {
     });
     L.parser.info(`OK: ${quads.length} триплетов, префиксов: ${Object.keys(prefixes).length}`, 'N3.Parser');
     if (quads.length === 0) {
-      L.parser.warn('Триплетов не найдено — возможно, файл содержит только @prefix или это не Turtle', 'N3.Parser');
+      L.parser.warn('Триплетов не найдено — проверьте, что файл содержит Turtle', 'N3.Parser');
     }
-    return { quads, prefixes };
+    return { quads, prefixes, valid: true };
   } catch (e) {
     const msg = e.message + (e.line != null ? ` (строка ${e.line}, колонка ${e.column})` : '');
     L.parser.error(msg, 'N3.Parser');
-    throw e;
+    return { quads: [], prefixes: {}, valid: false, error: msg };
   }
 }
-function extractPrefixesFromText(text) {
-  const prefixes = {};
-  let m;
-  const re1 = /@prefix\s+([A-Za-z_][\w-]*)?:\s*<([^>]+)>\s*\./g;
-  while ((m = re1.exec(text)) !== null) prefixes[m[1] || ''] = m[2];
-  const re2 = /PREFIX\s+([A-Za-z_][\w-]*)?:\s*<([^>]+)>/gi;
-  while ((m = re2.exec(text)) !== null) if (!(m[1] in prefixes)) prefixes[m[1] || ''] = m[2];
-  return prefixes;
+function validateTurtle(text) {
+  const result = parseTurtle(text);
+  return result.valid
+    ? { valid: true, message: `Turtle валиден: ${result.quads.length} триплетов` }
+    : { valid: false, message: `Ошибка Turtle: ${result.error}` };
 }
 
 // ============================================================
-// 5. СЕРИАЛИЗАТОРЫ
+// 5. ВАЛИДАЦИЯ SPARQL
+// ============================================================
+function validateSparql(text) {
+  if (!sparqljs) return { valid: false, message: 'sparqljs не загружен' };
+  try {
+    const parser = new sparqljs.Parser();
+    const parsed = parser.parse(text);
+    L.sparql.info(`SPARQL валиден: тип ${parsed.type || 'query'}`, 'sparqljs');
+    return { valid: true, message: `SPARQL валиден (тип: ${parsed.type || 'query'})` };
+  } catch (e) {
+    L.sparql.error(`SPARQL: ${e.message}`, 'sparqljs');
+    return { valid: false, message: `Ошибка SPARQL: ${e.message}` };
+  }
+}
+
+// ============================================================
+// 6. СЕРИАЛИЗАТОРЫ (без изменений)
 // ============================================================
 const RDF_TYPE   = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
 const XSD_STRING = 'http://www.w3.org/2001/XMLSchema#string';
@@ -459,7 +426,7 @@ function serializeTurtleCustom(quads, { usePrefixes, useGrouping, prefixes = {} 
     out += '\n';
   }
   if (quads.length === 0) {
-    out += '# Триплетов нет — возможно, исходный файл содержит только @prefix.\n';
+    out += '# Триплетов нет — проверьте исходный файл.\n';
     return out;
   }
   const subjects = new Map();
@@ -543,26 +510,11 @@ async function transform(quads, mode, prefixes = {}) {
 }
 
 // ============================================================
-// 6. SPARQL (Oxigraph) — с корректным init()
+// 7. SPARQL (Oxigraph) — с валидацией
 // ============================================================
 let store = null;
 let oxigraphReady = false;
 
-async function initOxigraph() {
-  if (!oxigraph) { L.sparql.error('модуль не загружен', 'oxigraph'); return; }
-  if (typeof oxigraphInit !== 'function') {
-    L.sparql.error('init() не найден в экспортах', 'oxigraph');
-    return;
-  }
-  try {
-    L.sparql.info('вызов init()…', 'oxigraph');
-    await oxigraphInit();
-    oxigraphReady = true;
-    L.sparql.info('WASM инициализирован ✓', 'oxigraph');
-  } catch (e) {
-    L.sparql.error('init: ' + e.message, 'oxigraph');
-  }
-}
 function loadStoreFromQuads(quads) {
   if (!oxigraphReady) { L.sparql.warn('store не готов, пропуск', 'oxigraph'); return; }
   try {
@@ -629,7 +581,7 @@ function resultToCSV(res) {
 }
 
 // ============================================================
-// 7. HELP (встроенный markdown)
+// 8. HELP
 // ============================================================
 const HELP_MD = `# RDF Browser Toolkit — справка
 
@@ -639,9 +591,12 @@ const HELP_MD = `# RDF Browser Toolkit — справка
 3. Для SPARQL загрузите \`.rq\` и нажмите **▶ Выполнить**.
 
 ## <a id="adding-defaults"></a>Добавление в список «По умолчанию»
-1. Откройте \`index.html\` в редакторе.
-2. Найдите \`const DEFAULTS = {...}\` и добавьте запись в \`original\` или \`sparql\`.
-3. Закоммитьте.
+1. Откройте \`files/defaults.json\`.
+2. Добавьте объект в массив \`rdf\` или \`sparql\`:
+   \`\`\`json
+   { "label": "Мой файл", "url": "files/my.ttl" }
+   \`\`\`
+3. Закоммитьте. После обновления страницы запись появится в списке.
 
 ## Режимы Turtle
 - **with prefixes + predicate-object lists** — компактно, с \`@prefix\`, \`;\` и \`,\`.
@@ -649,13 +604,13 @@ const HELP_MD = `# RDF Browser Toolkit — справка
 - **without prefixes + predicate-object lists** — полные IRI, но с группировкой.
 - **without prefixes + explicit triples** — полностью развёрнуто.
 
-## Логические метки в Log
-Строки вида \`[parser.js]\`, \`[loader.js]\` — это **ярлыки частей приложения**,
-а не отдельные файлы. Весь код находится в одном \`index.html\`.
+## Валидация
+- **Turtle** проверяется через N3.Parser. Ошибки выводятся в окно Format и в Log.
+- **SPARQL** проверяется через sparqljs. Ошибки выводятся в окно Result и в Log.
 
-## Ограничения
-- Внешние URL должны отдавать CORS. Для GitHub используется \`raw.githubusercontent.com\`.
-- YAML-LD реализован через цепочку JSON-LD → YAML.`;
+## Логические метки в Log
+Строки вида \`[parser.js]\`, \`[loader.js]\` — это ярлыки частей приложения,
+а не отдельные файлы. Весь код находится в одном \`index.html\`.`;
 
 function mdToHtml(md) {
   const lines = md.split('\n');
@@ -685,20 +640,12 @@ function mdToHtml(md) {
 }
 
 // ============================================================
-// 8. СОСТОЯНИЕ И DEFAULTS
+// 9. СОСТОЯНИЕ
 // ============================================================
-const DEFAULTS = {
-  original: [
-    { label: "example1/test1.md", url: "https://github.com/bpmbpm/onto/blob/main/example1/test1.md" }
-  ],
-  sparql: [
-    { label: "01-all-triples.rq", url: "https://github.com/bpmbpm/mdld-test/blob/main/ver2/SPARQL/01-all-triples.rq" }
-  ]
-};
-
 const state = {
   originalText:'', originalQuads:[], originalPrefixes:{},
-  formattedText:'', sparqlText:'', resultRows:null
+  formattedText:'', sparqlText:'', resultRows:null,
+  defaults: { rdf: [], sparql: [] }
 };
 
 function renderOriginal() { $('view-original').innerHTML = `<code>${highlight(state.originalText)}</code>`; }
@@ -706,27 +653,33 @@ function renderSparql()   { $('view-sparql').innerHTML   = `<code>${highlight(st
 function renderFormat()   { $('view-format').innerHTML   = `<code>${highlight(state.formattedText)}</code>`; }
 
 // ============================================================
-// 9. ОСНОВНОЙ ПОТОК
+// 10. ОСНОВНОЙ ПОТОК
 // ============================================================
 function setOriginalText(text) {
   state.originalText = text;
   renderOriginal();
-  parseAndPrepare();
-}
-function parseAndPrepare() {
-  try {
-    const fromText = extractPrefixesFromText(state.originalText);
-    const { quads, prefixes } = parseTurtle(state.originalText);
-    state.originalQuads = quads;
-    state.originalPrefixes = { ...fromText, ...prefixes };
-    loadStoreFromQuads(quads);
-    applyFormat();
-  } catch (e) {
+
+  // Валидация Turtle
+  const v = validateTurtle(text);
+  L.app.info(v.message, 'validate');
+  if (!v.valid) {
     state.originalQuads = [];
-    state.originalPrefixes = extractPrefixesFromText(state.originalText);
-    $('view-format').innerHTML = `<code>Парсинг не удался — см. Log</code>`;
-    L.app.error('parse failed: ' + e.message);
+    state.originalPrefixes = {};
+    $('view-format').innerHTML = `<code>${esc(v.message)}</code>`;
+    return;
   }
+
+  // Парсинг
+  const fromText = {};
+  const re1 = /@prefix\s+([A-Za-z_][\w-]*)?:\s*<([^>]+)>\s*\./g;
+  let m;
+  while ((m = re1.exec(text)) !== null) fromText[m[1] || ''] = m[2];
+
+  const result = parseTurtle(text);
+  state.originalQuads = result.quads;
+  state.originalPrefixes = { ...fromText, ...result.prefixes };
+  loadStoreFromQuads(result.quads);
+  applyFormat();
 }
 async function applyFormat() {
   const mode = $('sel-format').value;
@@ -748,10 +701,21 @@ async function loadSparqlFromUrl(url) {
   try {
     state.sparqlText = await loadFromUrl(url);
     renderSparql();
+    // Валидация SPARQL
+    const v = validateSparql(state.sparqlText);
+    L.app.info(v.message, 'validate');
   } catch (e) { L.app.error('loader: ' + e.message); }
 }
 function runSparql() {
   if (!state.sparqlText.trim()) { L.app.warn('SPARQL пуст'); return; }
+
+  // Валидация перед выполнением
+  const v = validateSparql(state.sparqlText);
+  if (!v.valid) {
+    $('view-result').innerHTML = `<code>${esc(v.message)}</code>`;
+    return;
+  }
+
   try {
     const res = runQuery(state.sparqlText);
     state.resultRows = res;
@@ -764,10 +728,22 @@ function runSparql() {
 }
 
 // ============================================================
-// 10. INIT
+// 11. INIT
 // ============================================================
+async function loadDefaults() {
+  try {
+    L.app.info('Загрузка files/defaults.json…', 'fetch');
+    const r = await fetch('files/defaults.json');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    state.defaults = await r.json();
+    L.app.info(`defaults: rdf=${state.defaults.rdf?.length || 0}, sparql=${state.defaults.sparql?.length || 0}`, 'fetch');
+  } catch (e) {
+    L.app.warn('defaults.json: ' + e.message, 'fetch');
+    state.defaults = { rdf: [], sparql: [] };
+  }
+}
 function fillDefaultSelects() {
-  const add = (selId, list) => {
+  const add = (selId, list, kind) => {
     const sel = $(selId);
     list.forEach(item => {
       const o = document.createElement('option');
@@ -778,15 +754,14 @@ function fillDefaultSelects() {
     sel.addEventListener('change', e => {
       const v = e.target.value;
       if (!v || v.startsWith('—')) return;
-      if (selId === 'sel-default-original') { $('url-original').value = v; loadOriginalFromUrl(v); }
-      else                                  { $('url-sparql').value = v;   loadSparqlFromUrl(v); }
+      if (kind === 'rdf') { $('url-original').value = v; loadOriginalFromUrl(v); }
+      else                { $('url-sparql').value = v;   loadSparqlFromUrl(v); }
       e.target.selectedIndex = 0;
     });
   };
-  add('sel-default-original', DEFAULTS.original);
-  add('sel-default-sparql',   DEFAULTS.sparql);
+  add('sel-default-original', state.defaults.rdf || [], 'rdf');
+  add('sel-default-sparql',   state.defaults.sparql || [], 'sparql');
 }
-
 function bindEvents() {
   $('btn-help').addEventListener('click', () => {
     $('help-body').innerHTML = mdToHtml(HELP_MD);
@@ -831,12 +806,12 @@ function bindEvents() {
 
   $('btn-clear-log').addEventListener('click', () => { $('view-log').textContent = ''; });
 }
-
 async function init() {
   L.app.info('─── init ───');
+  oxigraphReady = !!oxigraph;
+  await loadDefaults();
   fillDefaultSelects();
   bindEvents();
-  await initOxigraph();
   await loadOriginalFromUrl($('url-original').value);
   await loadSparqlFromUrl($('url-sparql').value);
   L.app.info('─── ready ───');
