@@ -1,123 +1,52 @@
 // markdown.js
-// Преобразование RDF/JS quads в Markdown-документ.
-// Узлы группируются по rdf:type; каждый тип становится заголовком #,
-// каждый узел — подзаголовком ##, свойства — пунктами списка.
+// Режим "markdown": показывает исходный файл как если бы это был .md —
+// строки #, ##, ... становятся заголовками, остальное — текстом/блоками кода.
+// Никакого разбора RDF и никаких преобразований — pass-through + рендер.
 
-const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
-
-function getLabel(term, prefixes) {
-  if (term.termType === 'NamedNode') {
-    let best = null;
-    for (const [pfx, iri] of Object.entries(prefixes)) {
-      if (term.value.startsWith(iri) && (!best || iri.length > best.iri.length)) {
-        best = { pfx, iri };
-      }
-    }
-    if (best) {
-      const local = term.value.slice(best.iri.length);
-      if (/^[A-Za-z_][\w.-]*$/.test(local) || local === '') return `${best.pfx}:${local}`;
-    }
-    return `<${term.value}>`;
-  }
-  if (term.termType === 'BlankNode') return `_:${term.value}`;
-  if (term.termType === 'Literal') {
-    const lit = `"${term.value}"`;
-    if (term.language) return `${lit}@${term.language}`;
-    return lit;
-  }
-  return String(term.value);
+// Pass-through: возвращает текст без изменений.
+// Реальный рендер делает mdToHtml() в renderFormat().
+export function toMarkdown(text) {
+  return text;
 }
 
-function termKey(t) {
-  if (!t) return '';
-  switch (t.termType) {
-    case 'NamedNode': return 'N' + t.value;
-    case 'BlankNode': return 'B' + t.value;
-    case 'Literal':   return `L|${t.value}|${t.language}|${t.datatype?.value}`;
-    default:          return 'X' + t.value;
-  }
-}
+// Мини-рендерер Markdown → HTML.
+export function mdToHtml(md) {
+  const lines = md.split('\n');
+  let html = '', inCode = false, inList = false, para = [];
+  const flush = () => { if (para.length) { html += `<p>${para.join(' ')}</p>`; para = []; } };
+  const closeList = () => { if (inList) { html += '</ul>'; inList = false; } };
+  const inline = s => s
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/`([^`]+)`/g,'<code>$1</code>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
 
-export function rdfToMarkdown(quads, prefixes = {}, options = {}) {
-  const { includeLiterals = true, title = 'RDF Graph' } = options;
-
-  // 1. Карта типов
-  const types = new Map();
-  for (const q of quads) {
-    if (q.predicate.value === RDF_TYPE && q.object.termType === 'NamedNode') {
-      types.set(termKey(q.subject), getLabel(q.object, prefixes));
+  for (const raw of lines) {
+    if (raw.startsWith('```')) {
+      flush(); closeList();
+      html += inCode ? '</code></pre>' : '<pre><code>';
+      inCode = !inCode;
+      continue;
     }
-  }
-
-  // 2. Группировка триплетов по субъекту
-  const subjects = new Map();
-  for (const q of quads) {
-    const sk = termKey(q.subject);
-    if (!subjects.has(sk)) {
-      subjects.set(sk, {
-        subject: q.subject,
-        label: getLabel(q.subject, prefixes),
-        type: types.get(sk) || 'Resource',
-        props: new Map(),
-      });
+    if (inCode) {
+      html += raw.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '\n';
+      continue;
     }
-    const s = subjects.get(sk);
-    const pk = termKey(q.predicate);
-    if (!s.props.has(pk)) s.props.set(pk, { predicate: q.predicate, objects: [] });
-    s.props.get(pk).objects.push(q.object);
-  }
-
-  // 3. Группировка субъектов по типу
-  const byType = new Map();
-  for (const s of subjects.values()) {
-    if (!byType.has(s.type)) byType.set(s.type, []);
-    byType.get(s.type).push(s);
-  }
-
-  // 4. Генерация Markdown
-  let out = `# ${title}\n\n`;
-  out += `_Триплетов: ${quads.length}, субъектов: ${subjects.size}, типов: ${byType.size}._\n\n`;
-
-  // Стабильная сортировка типов по алфавиту
-  const sortedTypes = [...byType.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-
-  for (const [type, list] of sortedTypes) {
-    out += `## Тип: ${type}\n\n`;
-
-    // Сортировка субъектов по метке
-    const sortedSubjects = [...list].sort((a, b) => a.label.localeCompare(b.label));
-
-    for (const s of sortedSubjects) {
-      out += `### \`${s.label}\`\n\n`;
-
-      // Сортировка предикатов по метке
-      const sortedPreds = [...s.props.entries()].sort((a, b) => {
-        const la = getLabel(a[1].predicate, prefixes);
-        const lb = getLabel(b[1].predicate, prefixes);
-        return la.localeCompare(lb);
-      });
-
-      for (const [, { predicate, objects }] of sortedPreds) {
-        // rdf:type уже отражён в заголовке типа — пропускаем
-        if (predicate.value === RDF_TYPE) continue;
-
-        const pLabel = getLabel(predicate, prefixes);
-        const objs = objects
-          .filter(o => includeLiterals || o.termType !== 'Literal')
-          .map(o => {
-            const l = getLabel(o, prefixes);
-            // Литералы в backticks, чтобы подчеркивания и звёздочки не ломали Markdown
-            return o.termType === 'Literal' ? `\`${l}\`` : `\`${l}\``;
-          });
-
-        if (objs.length === 0) continue;
-
-        out += `- **${pLabel}**: ${objs.join(', ')}\n`;
-      }
-
-      out += '\n';
+    if (/^######\s+/.test(raw)) { flush(); closeList(); html += `<h6>${inline(raw.slice(7))}</h6>`; continue; }
+    if (/^#####\s+/.test(raw))  { flush(); closeList(); html += `<h5>${inline(raw.slice(6))}</h5>`; continue; }
+    if (/^####\s+/.test(raw))   { flush(); closeList(); html += `<h4>${inline(raw.slice(5))}</h4>`; continue; }
+    if (/^###\s+/.test(raw))    { flush(); closeList(); html += `<h3>${inline(raw.slice(4))}</h3>`; continue; }
+    if (/^##\s+/.test(raw))     { flush(); closeList(); html += `<h2>${inline(raw.slice(3))}</h2>`; continue; }
+    if (/^#\s+/.test(raw))      { flush(); closeList(); html += `<h1>${inline(raw.slice(2))}</h1>`; continue; }
+    if (/^[-*]\s+/.test(raw)) {
+      flush();
+      if (!inList) { html += '<ul>'; inList = true; }
+      html += `<li>${inline(raw.slice(2))}</li>`;
+      continue;
     }
+    if (raw.trim() === '') { flush(); closeList(); continue; }
+    para.push(inline(raw));
   }
-
-  return out;
+  flush(); closeList();
+  return html;
 }
