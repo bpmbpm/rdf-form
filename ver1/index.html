@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RDF Browser Toolkit</title>
+<link rel="stylesheet" href="styles.css" />
+<script type="importmap">
+{
+  "imports": {
+    "n3": "https://cdn.jsdelivr.net/npm/n3@1.17.2/+esm",
+    "jsonld": "https://cdn.jsdelivr.net/npm/jsonld@8.3.2/+esm",
+    "js-yaml": "https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/+esm",
+    "oxigraph": "https://cdn.jsdelivr.net/npm/oxigraph@0.4.0-beta.4/+esm"
+  }
+}
+</script>
+</head>
+<body>
+<header>
+  <h1>RDF Browser Toolkit</h1>
+  <button id="btn-help" title="Справка">Help</button>
+</header>
+
+<main>
+  <!-- ============ Row 1: original | format ============ -->
+  <section class="row">
+    <div class="pane">
+      <div class="pane-header">
+        <label>Original (Turtle)</label>
+      </div>
+      <div class="pane-toolbar">
+        <input id="url-original" type="url"
+               placeholder="URL исходного Turtle"
+               value="https://github.com/bpmbpm/onto/blob/main/example1/test1.md" />
+        <button id="btn-load-url-original">Загрузить URL</button>
+        <select id="sel-default-original">
+          <option>— по умолчанию —</option>
+        </select>
+        <button id="btn-load-buffer-original">Из буфера</button>
+        <button id="btn-copy-original">Копировать</button>
+        <button id="btn-load-file-original">Файл…</button>
+        <input id="file-original" type="file" hidden accept=".ttl,.turtle,.nt,.n3,.txt" />
+      </div>
+      <pre class="code-view" id="view-original"><code class="language-turtle"></code></pre>
+    </div>
+
+    <div class="pane">
+      <div class="pane-header"><label>Format (преобразование)</label></div>
+      <div class="pane-toolbar">
+        <select id="sel-format">
+          <option value="turtle-prefixes-compact">Turtle: with prefixes + predicate-object lists</option>
+          <option value="turtle-prefixes-explicit">Turtle: with prefixes + explicit triples</option>
+          <option value="turtle-no-prefixes-compact">Turtle: without prefixes + predicate-object lists</option>
+          <option value="turtle-no-prefixes-explicit">Turtle: without prefixes + explicit triples</option>
+          <option value="n3-prefixes-compact">N3: with prefixes + predicate-object lists</option>
+          <option value="ntriples">N-Triples</option>
+          <option value="jsonld-compact">JSON-LD: compact</option>
+          <option value="jsonld-expanded">JSON-LD: expanded</option>
+          <option value="jsonld-flattened">JSON-LD: flattened</option>
+          <option value="yamlld">YAML-LD (via JSON-LD)</option>
+        </select>
+        <button id="btn-copy-format">Копировать</button>
+      </div>
+      <pre class="code-view" id="view-format"><code class="language-turtle"></code></pre>
+    </div>
+  </section>
+
+  <!-- ============ Row 2: sparql | result ============ -->
+  <section class="row">
+    <div class="pane">
+      <div class="pane-header"><label>SPARQL</label></div>
+      <div class="pane-toolbar">
+        <input id="url-sparql" type="url"
+               placeholder="URL SPARQL"
+               value="https://github.com/bpmbpm/mdld-test/blob/main/ver2/SPARQL/01-all-triples.rq" />
+        <button id="btn-load-url-sparql">Загрузить URL</button>
+        <select id="sel-default-sparql">
+          <option>— по умолчанию —</option>
+        </select>
+        <button id="btn-load-buffer-sparql">Из буфера</button>
+        <button id="btn-copy-sparql">Копировать</button>
+        <button id="btn-run-sparql">▶ Выполнить</button>
+      </div>
+      <pre class="code-view" id="view-sparql"><code class="language-sparql"></code></pre>
+    </div>
+
+    <div class="pane">
+      <div class="pane-header"><label>Result</label></div>
+      <div class="pane-toolbar">
+        <button id="btn-copy-result">Копировать</button>
+        <button id="btn-save-csv">Сохранить (CSV)</button>
+      </div>
+      <pre class="code-view" id="view-result"><code></code></pre>
+    </div>
+  </section>
+
+  <!-- ============ Row 3: log ============ -->
+  <section class="row row-log">
+    <div class="pane pane-log">
+      <div class="pane-header">
+        <label>Log</label>
+        <button id="btn-clear-log">Очистить</button>
+      </div>
+      <pre class="log-view" id="view-log"></pre>
+    </div>
+  </section>
+</main>
+
+<!-- Help modal -->
+<div id="help-modal" class="modal hidden">
+  <div class="modal-content">
+    <button class="modal-close" id="btn-help-close">×</button>
+    <div id="help-body" class="markdown-body">Загрузка…</div>
+  </div>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
