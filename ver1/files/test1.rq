@@ -1,0 +1,12 @@
+PREFIX ex:    <http://example.org/>
+PREFIX onto:  <http://example.org/onto#>
+PREFIX rdfs2: <http://example.org/rdfs2#>
+
+SELECT ?person ?name ?hobbyLabel
+WHERE {
+  ?person a onto:Person ;
+          rdfs2:label ?name ;
+          onto:hasHobby ?hobby .
+  ?hobby rdfs2:label ?hobbyLabel .
+}
+ORDER BY ?name ?hobbyLabel
