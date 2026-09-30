@@ -3,6 +3,7 @@
     { "label": "test1.ttl — Alice и Bob", "url": "files/test1.ttl" }
   ],
   "sparql": [
-    { "label": "test1.rq — персоны и хобби", "url": "files/test1.rq" }
+    { "label": "01-all-triples.rq — все триплеты",     "url": "files/01-all-triples.rq" },
+    { "label": "02-persons.rq — персоны и их метки",   "url": "files/02-persons.rq" }
   ]
 }
