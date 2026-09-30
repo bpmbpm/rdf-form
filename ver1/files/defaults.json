@@ -1,0 +1,8 @@
+{
+  "rdf": [
+    { "label": "test1.ttl — Alice и Bob", "url": "files/test1.ttl" }
+  ],
+  "sparql": [
+    { "label": "test1.rq — персоны и хобби", "url": "files/test1.rq" }
+  ]
+}
