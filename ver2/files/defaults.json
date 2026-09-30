@@ -1,0 +1,10 @@
+{
+  "rdf": [
+    { "label": "test1.ttl — Alice и Bob (локальный)",        "url": "files/test1.ttl" },
+    { "label": "test1.md — Alice и Bob (Markdown на GitHub)", "url": "https://github.com/bpmbpm/onto/blob/main/example1/test1.md" }
+  ],
+  "sparql": [
+    { "label": "01-all-triples.rq — все триплеты",   "url": "files/01-all-triples.rq" },
+    { "label": "02-persons.rq — персоны и их метки", "url": "files/02-persons.rq" }
+  ]
+}
