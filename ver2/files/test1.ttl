@@ -1,0 +1,38 @@
+@prefix ex:    <http://example.org/> .
+@prefix onto:  <http://example.org/onto#> .
+@prefix rdf2:  <http://example.org/rdf2#> .
+@prefix rdfs2: <http://example.org/rdfs2#> .
+
+# --- Alice ---
+ex:alice
+    rdf2:type        onto:Person ;
+    rdfs2:label      "Алиса" ;
+    onto:hasAddress  ex:aliceAddress ;
+    onto:hasHobby    ex:aliceHobbyPhoto , ex:aliceHobbyChess .
+
+ex:aliceAddress
+    rdf2:type            onto:PostalAddress ;
+    rdfs2:label          "Адрес Алисы" ;
+    onto:streetAddress   "ул. Ленина, д. 10" ;
+    onto:addressLocality "Москва" ;
+    onto:postalCode      "101000" ;
+    onto:addressCountry  "Россия" .
+
+ex:aliceHobbyPhoto
+    rdf2:type   onto:Hobby ;
+    rdfs2:label "Фотография" .
+
+ex:aliceHobbyChess
+    rdf2:type   onto:Hobby ;
+    rdfs2:label "Шахматы" .
+
+# --- Bob ---
+ex:bob
+    rdf2:type        onto:Person ;
+    rdfs2:label      "Боб" ;
+    onto:knows       ex:alice ;
+    onto:hasHobby    ex:bobHobbyChess .
+
+ex:bobHobbyChess
+    rdf2:type   onto:Hobby ;
+    rdfs2:label "Шахматы" .
