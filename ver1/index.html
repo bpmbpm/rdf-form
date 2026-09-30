@@ -38,7 +38,7 @@ font-family:var(--mono);font-size:12px}
 border:1px solid var(--border);color:var(--fg);padding:4px 10px;border-radius:4px;
 cursor:pointer;font-size:12px}
 .pane-toolbar button:hover{border-color:var(--accent)}
-.pane-toolbar select{max-width:320px}
+.pane-toolbar select{max-width:420px}
 .code-view,.log-view{flex:1;margin:0;overflow:auto;padding:10px 12px;
 font-family:var(--mono);font-size:12.5px;line-height:1.5;white-space:pre;min-height:0}
 .code-view code{font-family:inherit}
@@ -103,17 +103,17 @@ font-family:var(--mono);font-size:90%}
     <div class="pane">
       <div class="pane-header"><label>Format</label></div>
       <div class="pane-toolbar">
-        <select id="sel-format">
-          <option value="turtle-prefixes-compact">Turtle: with prefixes + predicate-object lists</option>
-          <option value="turtle-prefixes-explicit">Turtle: with prefixes + explicit triples</option>
-          <option value="turtle-no-prefixes-compact">Turtle: without prefixes + predicate-object lists</option>
-          <option value="turtle-no-prefixes-explicit">Turtle: without prefixes + explicit triples</option>
-          <option value="n3-prefixes-compact">N3: with prefixes</option>
-          <option value="ntriples">N-Triples</option>
-          <option value="jsonld-compact">JSON-LD: compact</option>
-          <option value="jsonld-expanded">JSON-LD: expanded</option>
-          <option value="jsonld-flattened">JSON-LD: flattened</option>
-          <option value="yamlld">YAML-LD</option>
+        <select id="sel-format" title="Режим сериализации">
+          <option value="turtle-prefixes-compact">Turtle: с префиксами, компактно (группировка ; и ,)</option>
+          <option value="turtle-prefixes-explicit">Turtle: с префиксами, каждый триплет отдельной строкой</option>
+          <option value="turtle-no-prefixes-compact">Turtle: полные IRI, компактно (группировка ; и ,)</option>
+          <option value="turtle-no-prefixes-explicit">Turtle: полные IRI, каждый триплет отдельной строкой</option>
+          <option value="n3-prefixes-compact">N3: с префиксами (расширенный Turtle)</option>
+          <option value="ntriples">N-Triples: одна строка на триплет, без префиксов</option>
+          <option value="jsonld-compact">JSON-LD: компактный, с @context</option>
+          <option value="jsonld-expanded">JSON-LD: развёрнутый, без @context</option>
+          <option value="jsonld-flattened">JSON-LD: плоский, с @graph</option>
+          <option value="yamlld">YAML-LD: YAML-представление compact JSON-LD</option>
         </select>
         <button id="btn-copy-format">Копировать</button>
       </div>
@@ -126,7 +126,7 @@ font-family:var(--mono);font-size:90%}
       <div class="pane-header"><label>SPARQL</label></div>
       <div class="pane-toolbar">
         <input id="url-sparql" type="url" placeholder="URL SPARQL"
-               value="files/test1.rq" />
+               value="files/01-all-triples.rq" />
         <button id="btn-load-url-sparql">Загрузить</button>
         <select id="sel-default-sparql"><option>— по умолчанию —</option></select>
         <button id="btn-load-buffer-sparql">Из буфера</button>
@@ -205,7 +205,7 @@ window.addEventListener('unhandledrejection', e => {
 L.app.info('─── Модуль загружен ───');
 
 // ============================================================
-// 1. ИМПОРТ БИБЛИОТЕК (схема из mdld-test/ver2)
+// 1. ИМПОРТ БИБЛИОТЕК
 // ============================================================
 let N3, jsonld, yaml, oxigraph, sparqljs;
 
@@ -255,7 +255,7 @@ const RE = {
   variable: /[?$][A-Za-z_][\w-]*/y,
   prefixKw: /@prefix|@base|PREFIX|BASE/y,
   pname:    /[A-Za-z_][\w-]*:[A-Za-z_][\w.-]*/y,
-  keyword:  /\b(a|true|false|SELECT|WHERE|FILTER|ORDER|BY|LIMIT|OFFSET|DISTINCT|OPTIONAL|UNION|BIND|AS)\b/y,
+  keyword:  /\b(a|true|false|SELECT|WHERE|FILTER|ORDER|BY|LIMIT|OFFSET|DISTINCT|OPTIONAL|UNION|BIND|AS|PREFIX|BASE)\b/y,
   number:   /[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/y,
   punct:    /[.;,()\[\]{}]/y,
   word:     /[A-Za-z_][\w-]*|./y,
@@ -321,35 +321,45 @@ function downloadFile(name, text, mime='text/plain;charset=utf-8') {
 }
 
 // ============================================================
-// 4. ПАРСЕР + ВАЛИДАЦИЯ TURTLE
+// 4. ПАРСЕР TURTLE — СИНХРОННЫЙ, БЕЗ CALLBACK
 // ============================================================
-function parseTurtle(text, baseIRI='http://example.org/') {
+function extractPrefixesFromText(text) {
+  const prefixes = {};
+  let m;
+  const re1 = /@prefix\s+([A-Za-z_][\w-]*)?:\s*<([^>]+)>\s*\./g;
+  while ((m = re1.exec(text)) !== null) prefixes[m[1] || ''] = m[2];
+  const re2 = /PREFIX\s+([A-Za-z_][\w-]*)?:\s*<([^>]+)>/gi;
+  while ((m = re2.exec(text)) !== null) if (!(m[1] in prefixes)) prefixes[m[1] || ''] = m[2];
+  return prefixes;
+}
+
+// parser.parse(text) без callback возвращает массив quads синхронно
+function parseTurtleStrict(text, baseIRI='http://example.org/') {
   if (!N3) throw new Error('N3.js не загружен');
   L.parser.info(`старт, ${text.length} байт`, 'N3.Parser');
-  const parser = new N3.Parser({ baseIRI });
-  const quads = [], prefixes = {};
   try {
-    parser.parse(text, (err, quad, pref) => {
-      if (err) throw err;
-      if (pref) Object.assign(prefixes, pref);
-      if (quad) quads.push(quad);
-    });
+    const parser = new N3.Parser({ baseIRI });
+    const quads = parser.parse(text);        // ← массив, синхронно
+    const prefixes = extractPrefixesFromText(text);
     L.parser.info(`OK: ${quads.length} триплетов, префиксов: ${Object.keys(prefixes).length}`, 'N3.Parser');
     if (quads.length === 0) {
       L.parser.warn('Триплетов не найдено — проверьте, что файл содержит Turtle', 'N3.Parser');
     }
-    return { quads, prefixes, valid: true };
+    return { quads, prefixes };
   } catch (e) {
     const msg = e.message + (e.line != null ? ` (строка ${e.line}, колонка ${e.column})` : '');
     L.parser.error(msg, 'N3.Parser');
-    return { quads: [], prefixes: {}, valid: false, error: msg };
+    throw e;
   }
 }
+
 function validateTurtle(text) {
-  const result = parseTurtle(text);
-  return result.valid
-    ? { valid: true, message: `Turtle валиден: ${result.quads.length} триплетов` }
-    : { valid: false, message: `Ошибка Turtle: ${result.error}` };
+  try {
+    const r = parseTurtleStrict(text);
+    return { valid: true, message: `Turtle валиден: ${r.quads.length} триплетов` };
+  } catch (e) {
+    return { valid: false, message: `Ошибка Turtle: ${e.message}` };
+  }
 }
 
 // ============================================================
@@ -369,7 +379,7 @@ function validateSparql(text) {
 }
 
 // ============================================================
-// 6. СЕРИАЛИЗАТОРЫ (без изменений)
+// 6. СЕРИАЛИЗАТОРЫ
 // ============================================================
 const RDF_TYPE   = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
 const XSD_STRING = 'http://www.w3.org/2001/XMLSchema#string';
@@ -510,7 +520,7 @@ async function transform(quads, mode, prefixes = {}) {
 }
 
 // ============================================================
-// 7. SPARQL (Oxigraph) — с валидацией
+// 7. SPARQL (Oxigraph)
 // ============================================================
 let store = null;
 let oxigraphReady = false;
@@ -599,14 +609,14 @@ const HELP_MD = `# RDF Browser Toolkit — справка
 3. Закоммитьте. После обновления страницы запись появится в списке.
 
 ## Режимы Turtle
-- **with prefixes + predicate-object lists** — компактно, с \`@prefix\`, \`;\` и \`,\`.
-- **with prefixes + explicit triples** — с префиксами, каждый триплет отдельно.
-- **without prefixes + predicate-object lists** — полные IRI, но с группировкой.
-- **without prefixes + explicit triples** — полностью развёрнуто.
+- **с префиксами, компактно** — используются \`@prefix\`, \`;\` и \`,\`.
+- **с префиксами, каждый триплет** — префиксы есть, но каждый триплет отдельной строкой.
+- **полные IRI, компактно** — префиксы раскрыты, но триплеты сгруппированы.
+- **полные IRI, каждый триплет** — максимально развёрнутая форма.
 
 ## Валидация
-- **Turtle** проверяется через N3.Parser. Ошибки выводятся в окно Format и в Log.
-- **SPARQL** проверяется через sparqljs. Ошибки выводятся в окно Result и в Log.
+- **Turtle** проверяется через N3.Parser (синхронный API). Ошибки выводятся в Format и Log.
+- **SPARQL** проверяется через sparqljs. Ошибки выводятся в Result и Log.
 
 ## Логические метки в Log
 Строки вида \`[parser.js]\`, \`[loader.js]\` — это ярлыки частей приложения,
@@ -659,28 +669,24 @@ function setOriginalText(text) {
   state.originalText = text;
   renderOriginal();
 
-  // Валидация Turtle
-  const v = validateTurtle(text);
-  L.app.info(v.message, 'validate');
-  if (!v.valid) {
+  let parsed;
+  try {
+    parsed = parseTurtleStrict(text);
+  } catch (e) {
     state.originalQuads = [];
     state.originalPrefixes = {};
-    $('view-format').innerHTML = `<code>${esc(v.message)}</code>`;
+    $('view-format').innerHTML = `<code>Ошибка Turtle: ${esc(e.message)}</code>`;
     return;
   }
 
-  // Парсинг
-  const fromText = {};
-  const re1 = /@prefix\s+([A-Za-z_][\w-]*)?:\s*<([^>]+)>\s*\./g;
-  let m;
-  while ((m = re1.exec(text)) !== null) fromText[m[1] || ''] = m[2];
+  state.originalQuads = parsed.quads;
+  state.originalPrefixes = parsed.prefixes;
+  L.app.info(`Загружено: ${parsed.quads.length} триплетов, ${Object.keys(parsed.prefixes).length} префиксов`, 'validate');
 
-  const result = parseTurtle(text);
-  state.originalQuads = result.quads;
-  state.originalPrefixes = { ...fromText, ...result.prefixes };
-  loadStoreFromQuads(result.quads);
+  loadStoreFromQuads(parsed.quads);
   applyFormat();
 }
+
 async function applyFormat() {
   const mode = $('sel-format').value;
   try {
@@ -701,7 +707,6 @@ async function loadSparqlFromUrl(url) {
   try {
     state.sparqlText = await loadFromUrl(url);
     renderSparql();
-    // Валидация SPARQL
     const v = validateSparql(state.sparqlText);
     L.app.info(v.message, 'validate');
   } catch (e) { L.app.error('loader: ' + e.message); }
@@ -709,7 +714,6 @@ async function loadSparqlFromUrl(url) {
 function runSparql() {
   if (!state.sparqlText.trim()) { L.app.warn('SPARQL пуст'); return; }
 
-  // Валидация перед выполнением
   const v = validateSparql(state.sparqlText);
   if (!v.valid) {
     $('view-result').innerHTML = `<code>${esc(v.message)}</code>`;
