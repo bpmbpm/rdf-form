@@ -42,6 +42,13 @@ cursor:pointer;font-size:12px}
 .code-view,.log-view{flex:1;margin:0;overflow:auto;padding:10px 12px;
 font-family:var(--mono);font-size:12.5px;line-height:1.5;white-space:pre;min-height:0}
 .code-view code{font-family:inherit}
+/* Рендер markdown внутри окна Format */
+.code-view .markdown-body{
+  white-space:normal;
+  font-family:system-ui,sans-serif;
+  font-size:14px;
+  color:var(--fg);
+}
 .log-view{background:#0b0e12;font-size:11.5px;color:#b6c0cd}
 .tok-comment{color:#6a7a8a;font-style:italic}.tok-prefix{color:#c586c0}
 .tok-keyword{color:#569cd6;font-weight:600}.tok-iri{color:#4ec9b0}
@@ -60,6 +67,13 @@ border:none;font-size:24px;color:var(--muted);cursor:pointer}
 .markdown-body code{background:var(--panel-2);padding:2px 5px;border-radius:3px;
 font-family:var(--mono);font-size:90%}
 .markdown-body pre{background:var(--panel-2);padding:12px;border-radius:6px;overflow:auto}
+.markdown-body h1,.markdown-body h2,.markdown-body h3,
+.markdown-body h4,.markdown-body h5,.markdown-body h6{color:#fff;margin:1em 0 .4em}
+.markdown-body h1{font-size:1.6em;border-bottom:1px solid var(--border);padding-bottom:.3em}
+.markdown-body h2{font-size:1.3em;border-bottom:1px solid var(--border);padding-bottom:.2em}
+.markdown-body h3{font-size:1.1em}
+.markdown-body ul{padding-left:1.4em}
+.markdown-body p{margin:.5em 0}
 ::-webkit-scrollbar{width:10px;height:10px}
 ::-webkit-scrollbar-thumb{background:#2a313b;border-radius:5px}
 </style>
@@ -115,7 +129,7 @@ font-family:var(--mono);font-size:90%}
           <option value="jsonld-flattened">JSON-LD: плоский, с @graph</option>
           <option value="yamlld">YAML-LD: YAML-представление compact JSON-LD</option>
           <option value="mermaid">Mermaid: граф с заголовками (#) по типам</option>
-          <option value="markdown">Markdown: заголовки (#, ##, ###) по типам и узлам</option>
+          <option value="markdown">Markdown: файл, отрендеренный как Markdown (# = заголовок)</option>
         </select>
         <button id="btn-copy-format">Копировать</button>
       </div>
@@ -253,10 +267,12 @@ try {
 } catch (e) { L.app.error('mermaid.js: ' + e.message, 'import'); }
 
 // --- Markdown-модуль ---
-let rdfToMarkdown = null;
+let toMarkdown = null;
+let mdToHtml = null;
 try {
   const m = await import('./markdown.js');
-  rdfToMarkdown = m.rdfToMarkdown;
+  toMarkdown = m.toMarkdown;
+  mdToHtml   = m.mdToHtml;
   L.app.info('markdown.js загружен', 'import');
 } catch (e) { L.app.error('markdown.js: ' + e.message, 'import'); }
 
@@ -367,15 +383,6 @@ function parseTurtleStrict(text, baseIRI='http://example.org/') {
     const msg = e.message + (e.line != null ? ` (строка ${e.line}, колонка ${e.column})` : '');
     L.parser.error(msg, 'N3.Parser');
     throw e;
-  }
-}
-
-function validateTurtle(text) {
-  try {
-    const r = parseTurtleStrict(text);
-    return { valid: true, message: `Turtle валиден: ${r.quads.length} триплетов` };
-  } catch (e) {
-    return { valid: false, message: `Ошибка Turtle: ${e.message}` };
   }
 }
 
@@ -536,10 +543,6 @@ async function transform(quads, mode, prefixes = {}) {
       if (!rdfToMermaid) throw new Error('mermaid.js не загружен');
       L.mermaid.info(`генерация Mermaid: quads=${quads.length}`);
       return rdfToMermaid(quads, prefixes);
-    case 'markdown':
-      if (!rdfToMarkdown) throw new Error('markdown.js не загружен');
-      L.markdown.info(`генерация Markdown: quads=${quads.length}`);
-      return rdfToMarkdown(quads, prefixes);
     default: throw new Error('Неизвестный режим: ' + mode);
   }
 }
@@ -627,10 +630,7 @@ const HELP_MD = `# RDF Browser Toolkit — справка
 
 ## <a id="adding-defaults"></a>Добавление в список «По умолчанию»
 1. Откройте \`files/defaults.json\`.
-2. Добавьте объект в массив \`rdf\` или \`sparql\`:
-   \`\`\`json
-   { "label": "Мой файл", "url": "files/my.ttl" }
-   \`\`\`
+2. Добавьте объект в массив \`rdf\` или \`sparql\`.
 3. Закоммитьте. После обновления страницы запись появится в списке.
 
 ## Режимы Format
@@ -639,44 +639,13 @@ const HELP_MD = `# RDF Browser Toolkit — справка
 - **N-Triples** — построчно, без префиксов.
 - **JSON-LD** — compact / expanded / flattened.
 - **YAML-LD** — через compact JSON-LD → YAML.
-- **Mermaid** — граф \`flowchart TD\` с группировкой по типам (\`subgraph\`).
-- **Markdown** — заголовки \`#\`, \`##\`, \`###\` по типам и узлам, свойства — списком.
-
-## Валидация
-- **Turtle** проверяется через N3.Parser (синхронный API).
-- **SPARQL** проверяется через sparqljs.
+- **Mermaid** — граф \`flowchart TD\` с группировкой по типам.
+- **Markdown** — исходный файл показывается так, как если бы он был \`.md\`:
+  строки \`#\` превращаются в заголовки, остальное — в текст/блоки кода.
 
 ## Логические метки в Log
-Строки вида \`[parser.js]\`, \`[mermaid.js]\`, \`[markdown.js]\` — это ярлыки частей
-приложения. \`mermaid.js\` и \`markdown.js\` — действительно отдельные файлы-модули,
-остальные — логические метки внутри \`index.html\`.`;
-
-function mdToHtml(md) {
-  const lines = md.split('\n');
-  let html = '', inCode = false, inList = false, para = [];
-  const flush = () => { if (para.length) { html += `<p>${para.join(' ')}</p>`; para = []; } };
-  const closeList = () => { if (inList) { html += '</ul>'; inList = false; } };
-  const inline = s => s
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/`([^`]+)`/g,'<code>$1</code>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>')
-    .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
-  for (const raw of lines) {
-    if (raw.startsWith('```')) { flush(); closeList();
-      html += inCode ? '</code></pre>' : '<pre><code>'; inCode = !inCode; continue; }
-    if (inCode) { html += raw.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '\n'; continue; }
-    if (/^###\s+/.test(raw)) { flush(); closeList(); html += `<h3>${inline(raw.slice(4))}</h3>`; continue; }
-    if (/^##\s+/.test(raw))  { flush(); closeList(); html += `<h2>${inline(raw.slice(3))}</h2>`; continue; }
-    if (/^#\s+/.test(raw))   { flush(); closeList(); html += `<h1>${inline(raw.slice(2))}</h1>`; continue; }
-    if (/^[-*]\s+/.test(raw)) { flush();
-      if (!inList) { html += '<ul>'; inList = true; }
-      html += `<li>${inline(raw.slice(2))}</li>`; continue; }
-    if (raw.trim() === '') { flush(); closeList(); continue; }
-    para.push(inline(raw));
-  }
-  flush(); closeList();
-  return html;
-}
+Строки \`[parser.js]\`, \`[mermaid.js]\`, \`[markdown.js]\` — ярлыки частей приложения.
+\`mermaid.js\` и \`markdown.js\` — отдельные файлы-модули, остальные — метки внутри \`index.html\`.`;
 
 // ============================================================
 // 9. СОСТОЯНИЕ
@@ -684,12 +653,25 @@ function mdToHtml(md) {
 const state = {
   originalText:'', originalQuads:[], originalPrefixes:{},
   formattedText:'', sparqlText:'', resultRows:null,
+  formatMode: 'turtle-prefixes-compact',
   defaults: { rdf: [], sparql: [] }
 };
 
 function renderOriginal() { $('view-original').innerHTML = `<code>${highlight(state.originalText)}</code>`; }
 function renderSparql()   { $('view-sparql').innerHTML   = `<code>${highlight(state.sparqlText)}</code>`; }
-function renderFormat()   { $('view-format').innerHTML   = `<code>${highlight(state.formattedText)}</code>`; }
+
+function renderFormat() {
+  if (state.formatMode === 'markdown') {
+    if (!mdToHtml) {
+      $('view-format').innerHTML = `<code>markdown.js не загружен</code>`;
+      return;
+    }
+    // Рендерим сырой текст как Markdown: # становятся заголовками
+    $('view-format').innerHTML = `<div class="markdown-body">${mdToHtml(state.formattedText)}</div>`;
+  } else {
+    $('view-format').innerHTML = `<code>${highlight(state.formattedText)}</code>`;
+  }
+}
 
 // ============================================================
 // 10. ОСНОВНОЙ ПОТОК
@@ -704,7 +686,9 @@ function setOriginalText(text) {
   } catch (e) {
     state.originalQuads = [];
     state.originalPrefixes = {};
-    $('view-format').innerHTML = `<code>Ошибка Turtle: ${esc(e.message)}</code>`;
+    state.formattedText = `Ошибка Turtle: ${e.message}`;
+    state.formatMode = 'raw-error';
+    $('view-format').innerHTML = `<code>${esc(state.formattedText)}</code>`;
     return;
   }
 
@@ -718,16 +702,31 @@ function setOriginalText(text) {
 
 async function applyFormat() {
   const mode = $('sel-format').value;
+  state.formatMode = mode;
+
   try {
-    const out = await transform(state.originalQuads, mode, state.originalPrefixes);
+    let out;
+
+    if (mode === 'markdown') {
+      // Просто берём сырой текст файла — рендер произойдёт в renderFormat
+      if (!toMarkdown) throw new Error('markdown.js не загружен');
+      L.markdown.info(`passthrough: ${state.originalText.length} байт`);
+      out = toMarkdown(state.originalText);
+    } else {
+      out = await transform(state.originalQuads, mode, state.originalPrefixes);
+    }
+
     state.formattedText = out;
     renderFormat();
     L.app.info(`format OK (${out.length} байт)`);
   } catch (e) {
     L.app.error(e.message, mode);
-    $('view-format').innerHTML = `<code>Ошибка: ${esc(e.message)}</code>`;
+    state.formattedText = `Ошибка: ${e.message}`;
+    state.formatMode = 'raw-error';
+    $('view-format').innerHTML = `<code>${esc(state.formattedText)}</code>`;
   }
 }
+
 async function loadOriginalFromUrl(url) {
   try { setOriginalText(await loadFromUrl(url)); }
   catch (e) { L.app.error('loader: ' + e.message); }
@@ -797,6 +796,7 @@ function fillDefaultSelects() {
 }
 function bindEvents() {
   $('btn-help').addEventListener('click', () => {
+    if (!mdToHtml) return L.app.warn('markdown.js не загружен, Help недоступен');
     $('help-body').innerHTML = mdToHtml(HELP_MD);
     $('help-modal').classList.remove('hidden');
   });
