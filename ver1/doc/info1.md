@@ -27,7 +27,7 @@
 
 ## `help.md`
 
-```markdown
+
 # RDF Browser Toolkit — справка
 
 ## Быстрый старт
@@ -79,13 +79,11 @@
 
 - Внешние URL должны отдавать CORS-заголовки. Для GitHub используйте `raw.githubusercontent.com`.
 - YAML-LD находится в статусе черновика W3C; используется fallback через JSON-LD.
-```
 
 ---
 
 ## `README.md`
 
-```markdown
 # RDF Browser Toolkit
 
 Браузерное приложение для просмотра, преобразования и запроса RDF-данных.
@@ -137,15 +135,7 @@ doc/
 | `js-yaml` | Сериализация YAML (для YAML-LD) |
 | `oxigraph` | In-memory RDF store + SPARQL 1.1 (WASM) |
 
-## Лицензия
 
-MIT.
-```
-
----
-
-
----
 
 ## Что важно помнить при публикации
 
