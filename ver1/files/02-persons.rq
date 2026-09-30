@@ -1,0 +1,11 @@
+PREFIX onto:  <http://example.org/onto#>
+PREFIX rdf2:  <http://example.org/rdf2#>
+PREFIX rdfs2: <http://example.org/rdfs2#>
+
+# Персоны и их метки (используется rdf2:type, как в test1.ttl)
+SELECT ?person ?name
+WHERE {
+  ?person rdf2:type onto:Person ;
+          rdfs2:label ?name .
+}
+ORDER BY ?name
