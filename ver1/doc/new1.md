@@ -1,0 +1,126 @@
+## 1
+Посмотри файл https://github.com/bpmbpm/onto/edit/main/example1/test1.md  
+Подставь его в по умолчанию.  
+С ним была проблема, т.к. он не .ttl а .md  
+но ведь в нем соблюден формат turtle, и # читается как комментарий. Почему его нельзя использовать?   
+Хотелось бы чтобы при открытии в github он читался как markdown, а при подстановке как turtle - он считывался как rdf.
+
+
+Разобрался, почему ваш `test1.md` не поддавался парсингу, и как это можно исправить.
+
+### 🔍 Почему `test1.md` не работал как Turtle?
+
+Проблема не в расширении `.md` и не в символе `#`, а в **синтаксисе объявления префиксов**. GitHub автоматически преобразует любой URL, похожий на ссылку, в Markdown-ссылку. В вашем файле строки вида `@prefix ex: https://...` превратились в `@prefix ex: [https://...](https://...)`.
+
+Парсер Turtle (N3.js) ожидает, что IRI будет заключён в угловые скобки `< >`. Он видит `[` и `(` и не понимает, что это IRI. Символ `#` в начале строки — это **корректный комментарий Turtle**, он не мешает. Основная причина сбоя — Markdown-ссылки в префиксах и отсутствие их обрамления в `< >`.
+
+### 💡 Решение: предварительная обработка Markdown
+
+Нужно научить приложение извлекать «чистый» Turtle из Markdown перед передачей в N3.js. Можно добавить в код простую функцию, которая делает две вещи:
+
+1.  **Находит блоки кода в Markdown.** Если Turtle будет обёрнут в тройные обратные кавычки (```` ```turtle ````), извлечь только их содержимое.
+2.  **Исправляет сломанные префиксы.** Если блоков нет, но в тексте есть строки `@prefix ... : [URL](URL) .`, заменить их на корректные `@prefix ... : <URL> .`.
+
+Вот модификация для вашего файла `index.html`.
+
+#### Шаг 1. Добавьте функцию очистки
+
+В `<script type="module">`, после функции `extractPrefixesFromText`, добавьте:
+
+```javascript
+/**
+ * Очищает Markdown-контент для парсинга как Turtle.
+ * 1. Если есть блоки ```turtle, извлекает только их.
+ * 2. Если блоков нет, исправляет Markdown-ссылки в @prefix на <IRI>.
+ */
+function cleanMarkdownForTurtle(text) {
+  // 1. Пробуем найти блоки ```turtle ... ```
+  const codeBlockRe = /```(?:turtle|ttl|n3)?\s*\n([\s\S]*?)```/g;
+  const blocks = [];
+  let m;
+  while ((m = codeBlockRe.exec(text)) !== null) {
+    blocks.push(m[1]);
+  }
+  if (blocks.length > 0) {
+    L.parser.info(`Извлечено ${blocks.length} блок(ов) кода из Markdown`, 'preprocess');
+    return blocks.join('\n\n');
+  }
+
+  // 2. Блоков нет — исправляем сломанные @prefix
+  L.parser.info('Блоков ``` не найдено, исправляем @prefix вручную', 'preprocess');
+  let cleaned = text;
+  // Ищем @prefix name: [url](url) . и заменяем на @prefix name: <url> .
+  const brokenPrefixRe = /(@prefix\s+[A-Za-z_][\w-]*:\s*)\[([^\]]+)\]\(([^)]+)\)(\s*\.)/g;
+  cleaned = cleaned.replace(brokenPrefixRe, (_, before, linkText, linkUrl, after) => {
+    // Приоритет — тому, что в скобках (), т.к. это реальный URL после рендера
+    const realUrl = linkUrl || linkText;
+    return `${before}<${realUrl}>${after}`;
+  });
+  // Также исправляем вариант без Markdown-ссылки, но с пробелами
+  // @prefix ex: https://... .  →  @prefix ex: <https://...> .
+  const plainPrefixRe = /(@prefix\s+[A-Za-z_][\w-]*:\s*)([^\s<>][^\s]*?)(\s*\.)/g;
+  cleaned = cleaned.replace(plainPrefixRe, (_, before, url, after) => {
+    if (url.startsWith('<') || url.includes('[')) return _; // уже исправлено
+    return `${before}<${url}>${after}`;
+  });
+
+  return cleaned;
+}
+```
+
+#### Шаг 2. Используйте её перед парсингом
+
+В функции `setOriginalText` замените вызов `parseTurtleStrict(text)` на:
+
+```javascript
+function setOriginalText(text) {
+  state.originalText = text;
+  renderOriginal();
+
+  // Очищаем Markdown перед парсингом
+  const turtleText = cleanMarkdownForTurtle(text);
+  if (turtleText !== text) {
+    L.app.info('Контент был очищен от Markdown-обёртки', 'preprocess');
+  }
+
+  let parsed;
+  try {
+    parsed = parseTurtleStrict(turtleText); // ← используем очищенный текст
+  } catch (e) {
+    // ... остальной код обработки ошибки ...
+    return;
+  }
+  // ... остальной код ...
+}
+```
+
+После этого ваш `test1.md` должен корректно парситься и в нём появится 12 триплетов.
+
+### 📝 Как подставить `test1.md` в список «по умолчанию»
+
+В файле `files/defaults.json` замените ссылку на `test1.ttl` на ваш Markdown-файл:
+
+```json
+{
+  "rdf": [
+    { "label": "test1.md — Alice и Bob (Markdown)", "url": "https://github.com/bpmbpm/onto/blob/main/example1/test1.md" }
+  ],
+  "sparql": [
+    { "label": "01-all-triples.rq — все триплеты",   "url": "files/01-all-triples.rq" },
+    { "label": "02-persons.rq — персоны и их метки", "url": "files/02-persons.rq" }
+  ]
+}
+```
+
+Приложение автоматически преобразует `github.com/.../blob/...` в raw-URL для загрузки.
+
+### ✅ Итог
+
+Теперь один и тот же файл `test1.md` будет вести себя по-разному в зависимости от контекста:
+
+| Среда | Поведение |
+|---|---|
+| **GitHub (веб)** | Отображается как обычный Markdown-документ (заголовки, ссылки и т.д.) |
+| **Ваше приложение** | Функция `cleanMarkdownForTurtle` «очищает» его, и N3.js парсит как валидный Turtle |
+
+Если в будущем захотите, чтобы GitHub тоже отображал код как Turtle, оберните его в ```` ```turtle ```` — тогда функция извлечёт блок автоматически.
