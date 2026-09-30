@@ -1,32 +1,405 @@
-// markdown.js
-// Преобразование RDF/JS quads в Markdown-документ.
-// Узлы группируются по rdf:type; каждый тип становится заголовком #,
-// каждый узел — подзаголовком ##, свойства — пунктами списка.
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RDF Browser Toolkit</title>
+<style>
+:root{--bg:#0f1216;--panel:#171b21;--panel-2:#1e232b;--border:#2a313b;
+--fg:#d7dde5;--muted:#8892a1;--accent:#4a9eff;--mono:ui-monospace,Menlo,Consolas,monospace}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--fg);
+display:flex;flex-direction:column;min-height:100vh}
+header{display:flex;align-items:center;gap:12px;padding:8px 16px;
+border-bottom:1px solid var(--border);background:var(--panel)}
+header h1{font-size:16px;margin:0;flex:1}
+header button{background:var(--panel-2);border:1px solid var(--border);
+color:var(--fg);padding:6px 12px;border-radius:6px;cursor:pointer}
+header button:hover{border-color:var(--accent)}
+main{flex:1;display:flex;flex-direction:column;gap:8px;padding:8px;
+min-height:0;overflow-y:auto}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px;min-height:180px;
+height:300px;resize:vertical;overflow:hidden;flex:0 0 auto}
+.row-log{display:grid;grid-template-columns:1fr;gap:8px;min-height:100px;
+height:160px;resize:vertical;overflow:hidden;flex:0 0 auto}
+.pane{display:flex;flex-direction:column;background:var(--panel);
+border:1px solid var(--border);border-radius:8px;min-height:0;overflow:hidden}
+.pane-header{display:flex;justify-content:space-between;align-items:center;
+padding:6px 10px;background:var(--panel-2);border-bottom:1px solid var(--border);
+font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.pane-header button{background:transparent;color:var(--muted);
+border:1px solid var(--border);border-radius:4px;padding:2px 8px;cursor:pointer;font-size:12px}
+.pane-toolbar{display:flex;flex-wrap:wrap;gap:4px;padding:6px;
+border-bottom:1px solid var(--border);background:#141920}
+.pane-toolbar input[type="url"]{flex:1 1 200px;min-width:120px;background:var(--bg);
+border:1px solid var(--border);color:var(--fg);padding:4px 8px;border-radius:4px;
+font-family:var(--mono);font-size:12px}
+.pane-toolbar select,.pane-toolbar button{background:var(--panel-2);
+border:1px solid var(--border);color:var(--fg);padding:4px 10px;border-radius:4px;
+cursor:pointer;font-size:12px}
+.pane-toolbar button:hover{border-color:var(--accent)}
+.pane-toolbar select{max-width:420px}
+.code-view,.log-view{flex:1;margin:0;overflow:auto;padding:10px 12px;
+font-family:var(--mono);font-size:12.5px;line-height:1.5;white-space:pre;min-height:0}
+.code-view code{font-family:inherit}
+.log-view{background:#0b0e12;font-size:11.5px;color:#b6c0cd}
+.tok-comment{color:#6a7a8a;font-style:italic}.tok-prefix{color:#c586c0}
+.tok-keyword{color:#569cd6;font-weight:600}.tok-iri{color:#4ec9b0}
+.tok-pname{color:#dcdcaa}.tok-string{color:#ce9178}.tok-number{color:#b5cea8}
+.tok-punct{color:#808a96}.tok-variable{color:#9cdcfe}.tok-lang{color:#4ec9b0}
+.tok-blank{color:#d19a66}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;
+align-items:center;justify-content:center;z-index:100}
+.modal.hidden{display:none}
+.modal-content{background:var(--panel);border:1px solid var(--border);
+border-radius:8px;max-width:900px;max-height:85vh;width:90%;overflow:auto;
+padding:24px 32px;position:relative}
+.modal-close{position:absolute;top:8px;right:12px;background:transparent;
+border:none;font-size:24px;color:var(--muted);cursor:pointer}
+.markdown-body{line-height:1.6}
+.markdown-body code{background:var(--panel-2);padding:2px 5px;border-radius:3px;
+font-family:var(--mono);font-size:90%}
+.markdown-body pre{background:var(--panel-2);padding:12px;border-radius:6px;overflow:auto}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:#2a313b;border-radius:5px}
+</style>
 
-const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
-
-function getLabel(term, prefixes) {
-  if (term.termType === 'NamedNode') {
-    let best = null;
-    for (const [pfx, iri] of Object.entries(prefixes)) {
-      if (term.value.startsWith(iri) && (!best || iri.length > best.iri.length)) {
-        best = { pfx, iri };
-      }
-    }
-    if (best) {
-      const local = term.value.slice(best.iri.length);
-      if (/^[A-Za-z_][\w.-]*$/.test(local) || local === '') return `${best.pfx}:${local}`;
-    }
-    return `<${term.value}>`;
+<script type="importmap">
+{
+  "imports": {
+    "n3":       "https://cdn.jsdelivr.net/npm/n3@latest/+esm",
+    "jsonld":   "https://cdn.jsdelivr.net/npm/jsonld@latest/+esm",
+    "js-yaml":  "https://cdn.jsdelivr.net/npm/js-yaml@latest/+esm",
+    "oxigraph": "https://cdn.jsdelivr.net/npm/oxigraph@latest/web.js",
+    "sparqljs": "https://cdn.jsdelivr.net/npm/sparqljs@latest/+esm"
   }
-  if (term.termType === 'BlankNode') return `_:${term.value}`;
-  if (term.termType === 'Literal') {
-    const lit = `"${term.value}"`;
-    if (term.language) return `${lit}@${term.language}`;
-    return lit;
-  }
-  return String(term.value);
 }
+</script>
+</head>
+<body>
+
+<header>
+  <h1>RDF Browser Toolkit</h1>
+  <button id="btn-help">Help</button>
+</header>
+
+<main>
+  <section class="row">
+    <div class="pane">
+      <div class="pane-header"><label>Original (Turtle)</label></div>
+      <div class="pane-toolbar">
+        <input id="url-original" type="url" placeholder="URL Turtle"
+               value="files/test1.ttl" />
+        <button id="btn-load-url-original">Загрузить</button>
+        <select id="sel-default-original"><option>— по умолчанию —</option></select>
+        <button id="btn-load-buffer-original">Из буфера</button>
+        <button id="btn-copy-original">Копировать</button>
+        <button id="btn-load-file-original">Файл…</button>
+        <input id="file-original" type="file" hidden accept=".ttl,.turtle,.nt,.n3,.txt,.md" />
+      </div>
+      <pre class="code-view" id="view-original"><code></code></pre>
+    </div>
+
+    <div class="pane">
+      <div class="pane-header"><label>Format</label></div>
+      <div class="pane-toolbar">
+        <select id="sel-format" title="Режим сериализации">
+          <option value="turtle-prefixes-compact">Turtle: с префиксами, компактно (группировка ; и ,)</option>
+          <option value="turtle-prefixes-explicit">Turtle: с префиксами, каждый триплет отдельной строкой</option>
+          <option value="turtle-no-prefixes-compact">Turtle: полные IRI, компактно (группировка ; и ,)</option>
+          <option value="turtle-no-prefixes-explicit">Turtle: полные IRI, каждый триплет отдельной строкой</option>
+          <option value="n3-prefixes-compact">N3: с префиксами (расширенный Turtle)</option>
+          <option value="ntriples">N-Triples: одна строка на триплет, без префиксов</option>
+          <option value="jsonld-compact">JSON-LD: компактный, с @context</option>
+          <option value="jsonld-expanded">JSON-LD: развёрнутый, без @context</option>
+          <option value="jsonld-flattened">JSON-LD: плоский, с @graph</option>
+          <option value="yamlld">YAML-LD: YAML-представление compact JSON-LD</option>
+          <option value="mermaid">Mermaid: граф с заголовками (#) по типам</option>
+          <option value="markdown">Markdown: заголовки (#, ##, ###) по типам и узлам</option>
+        </select>
+        <button id="btn-copy-format">Копировать</button>
+      </div>
+      <pre class="code-view" id="view-format"><code></code></pre>
+    </div>
+  </section>
+
+  <section class="row">
+    <div class="pane">
+      <div class="pane-header"><label>SPARQL</label></div>
+      <div class="pane-toolbar">
+        <input id="url-sparql" type="url" placeholder="URL SPARQL"
+               value="files/01-all-triples.rq" />
+        <button id="btn-load-url-sparql">Загрузить</button>
+        <select id="sel-default-sparql"><option>— по умолчанию —</option></select>
+        <button id="btn-load-buffer-sparql">Из буфера</button>
+        <button id="btn-copy-sparql">Копировать</button>
+        <button id="btn-run-sparql">▶ Выполнить</button>
+      </div>
+      <pre class="code-view" id="view-sparql"><code></code></pre>
+    </div>
+
+    <div class="pane">
+      <div class="pane-header"><label>Result</label></div>
+      <div class="pane-toolbar">
+        <button id="btn-copy-result">Копировать</button>
+        <button id="btn-save-csv">Сохранить (CSV)</button>
+      </div>
+      <pre class="code-view" id="view-result"><code></code></pre>
+    </div>
+  </section>
+
+  <section class="row row-log">
+    <div class="pane">
+      <div class="pane-header">
+        <label>Log</label>
+        <button id="btn-clear-log">Очистить</button>
+      </div>
+      <pre class="log-view" id="view-log"></pre>
+    </div>
+  </section>
+</main>
+
+<div id="help-modal" class="modal hidden">
+  <div class="modal-content">
+    <button class="modal-close" id="btn-help-close">×</button>
+    <div id="help-body" class="markdown-body"></div>
+  </div>
+</div>
+
+<script type="module">
+// ============================================================
+// 0. ЛОГИРОВАНИЕ
+// ============================================================
+const $ = id => document.getElementById(id);
+
+function _log(level, module, library, message) {
+  const el = $('view-log');
+  const tag = { info:'INFO ', warn:'WARN ', error:'ERROR', debug:'DEBUG' }[level] || 'INFO ';
+  const line = `[${new Date().toISOString()}] [${tag}] [${module}]${library ? ' ['+library+']' : ''} ${message}\n`;
+  if (el) { el.textContent += line; el.scrollTop = el.scrollHeight; }
+  const c = level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log';
+  console[c](line.trimEnd());
+}
+function mkLogger(mod) {
+  return {
+    info:  (m, l='') => _log('info',  mod, l, m),
+    warn:  (m, l='') => _log('warn',  mod, l, m),
+    error: (m, l='') => _log('error', mod, l, m),
+    debug: (m, l='') => _log('debug', mod, l, m),
+  };
+}
+const L = {
+  app:        mkLogger('app.js'),
+  loader:     mkLogger('loader.js'),
+  parser:     mkLogger('parser.js'),
+  serializer: mkLogger('serializer.js'),
+  sparql:     mkLogger('sparql.js'),
+  mermaid:    mkLogger('mermaid.js'),
+  markdown:   mkLogger('markdown.js'),
+};
+
+window.addEventListener('error', e => {
+  _log('error', 'window', '', e.message + (e.filename ? ` @ ${e.filename}:${e.lineno}` : ''));
+});
+window.addEventListener('unhandledrejection', e => {
+  const r = e.reason;
+  _log('error', 'promise', '', (r && r.message) ? r.message : String(r));
+});
+
+L.app.info('─── Модуль загружен ───');
+
+// ============================================================
+// 1. ИМПОРТ БИБЛИОТЕК
+// ============================================================
+let N3, jsonld, yaml, oxigraph, sparqljs;
+
+try {
+  N3 = await import('n3');
+  L.app.info('N3.js загружен', 'import');
+} catch (e) { L.app.error('N3.js: ' + e.message, 'import'); }
+
+try {
+  const j = await import('jsonld');
+  jsonld = j.default || j;
+  L.app.info('jsonld.js загружен', 'import');
+} catch (e) { L.app.error('jsonld.js: ' + e.message, 'import'); }
+
+try {
+  const y = await import('js-yaml');
+  yaml = y.default || y;
+  L.app.info('js-yaml загружен', 'import');
+} catch (e) { L.app.error('js-yaml: ' + e.message, 'import'); }
+
+try {
+  L.app.info('Загрузка oxigraph WASM…', 'import');
+  const oxMod = await import('oxigraph');
+  await oxMod.default();
+  oxigraph = oxMod;
+  L.app.info('oxigraph инициализирован ✓', 'import');
+} catch (e) { L.app.error('oxigraph: ' + e.message, 'import'); }
+
+try {
+  const s = await import('sparqljs');
+  sparqljs = s.default || s;
+  L.app.info('sparqljs загружен', 'import');
+} catch (e) { L.app.error('sparqljs: ' + e.message, 'import'); }
+
+// --- Mermaid-модуль ---
+let rdfToMermaid = null;
+try {
+  const m = await import('./mermaid.js');
+  rdfToMermaid = m.rdfToMermaid;
+  L.app.info('mermaid.js загружен', 'import');
+} catch (e) { L.app.error('mermaid.js: ' + e.message, 'import'); }
+
+// --- Markdown-модуль ---
+let rdfToMarkdown = null;
+try {
+  const m = await import('./markdown.js');
+  rdfToMarkdown = m.rdfToMarkdown;
+  L.app.info('markdown.js загружен', 'import');
+} catch (e) { L.app.error('markdown.js: ' + e.message, 'import'); }
+
+// ============================================================
+// 2. ПОДСВЕТКА СИНТАКСИСА
+// ============================================================
+const RE = {
+  comment:  /#[^\n]*/y,
+  ws:       /\s+/y,
+  string:   /"(?:[^"\\]|\\.)*"(?:@[a-zA-Z-]+|\^\^[^\s;,.]+)?|'(?:[^'\\]|\\.)*'/y,
+  iri:      /<[^>]*>/y,
+  lang:     /@[a-zA-Z-]+/y,
+  blank:    /_:[A-Za-z_][\w-]*/y,
+  variable: /[?$][A-Za-z_][\w-]*/y,
+  prefixKw: /@prefix|@base|PREFIX|BASE/y,
+  pname:    /[A-Za-z_][\w-]*:[A-Za-z_][\w.-]*/y,
+  keyword:  /\b(a|true|false|SELECT|WHERE|FILTER|ORDER|BY|LIMIT|OFFSET|DISTINCT|OPTIONAL|UNION|BIND|AS|PREFIX|BASE)\b/y,
+  number:   /[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/y,
+  punct:    /[.;,()\[\]{}]/y,
+  word:     /[A-Za-z_][\w-]*|./y,
+};
+const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function classify(src, i) {
+  for (const [name, cls] of [
+    ['comment','tok-comment'],['ws',null],['string','tok-string'],['iri','tok-iri'],
+    ['lang','tok-lang'],['blank','tok-blank'],['variable','tok-variable'],
+    ['prefixKw','tok-prefix'],['pname','tok-pname'],['keyword','tok-keyword'],
+    ['number','tok-number'],['punct','tok-punct'],['word',null],
+  ]) {
+    RE[name].lastIndex = i;
+    const m = RE[name].exec(src);
+    if (m) return [cls, m[0]];
+  }
+  return [null, src[i]];
+}
+function highlight(text) {
+  let out = '', i = 0;
+  while (i < text.length) {
+    const [cls, tok] = classify(text, i);
+    if (!tok) { out += esc(text[i]); i++; continue; }
+    out += cls ? `<span class="${cls}">${esc(tok)}</span>` : esc(tok);
+    i += tok.length;
+  }
+  return out;
+}
+
+// ============================================================
+// 3. ЗАГРУЗКА И БУФЕР
+// ============================================================
+function toRawUrl(url) {
+  const m = url.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/(?:blob|raw)\/(.+)$/);
+  return m ? `https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3]}` : url;
+}
+async function loadFromUrl(url) {
+  const raw = toRawUrl(url);
+  L.loader.info(`GET ${raw}`, 'fetch');
+  const r = await fetch(raw);
+  if (!r.ok) throw new Error(`HTTP ${r.status} ${r.statusText}`);
+  const text = await r.text();
+  L.loader.info(`получено ${text.length} байт`);
+  return text;
+}
+function loadFromFile(file) {
+  return new Promise((res, rej) => {
+    const rd = new FileReader();
+    rd.onload = () => res(rd.result);
+    rd.onerror = () => rej(rd.error);
+    rd.readAsText(file);
+  });
+}
+const readClipboard  = () => navigator.clipboard.readText();
+const writeClipboard = t => navigator.clipboard.writeText(t);
+function downloadFile(name, text, mime='text/plain;charset=utf-8') {
+  const blob = new Blob([text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ============================================================
+// 4. ПАРСЕР TURTLE — СИНХРОННЫЙ
+// ============================================================
+function extractPrefixesFromText(text) {
+  const prefixes = {};
+  let m;
+  const re1 = /@prefix\s+([A-Za-z_][\w-]*)?:\s*<([^>]+)>\s*\./g;
+  while ((m = re1.exec(text)) !== null) prefixes[m[1] || ''] = m[2];
+  const re2 = /PREFIX\s+([A-Za-z_][\w-]*)?:\s*<([^>]+)>/gi;
+  while ((m = re2.exec(text)) !== null) if (!(m[1] in prefixes)) prefixes[m[1] || ''] = m[2];
+  return prefixes;
+}
+
+function parseTurtleStrict(text, baseIRI='http://example.org/') {
+  if (!N3) throw new Error('N3.js не загружен');
+  L.parser.info(`старт, ${text.length} байт`, 'N3.Parser');
+  try {
+    const parser = new N3.Parser({ baseIRI });
+    const quads = parser.parse(text);
+    const prefixes = extractPrefixesFromText(text);
+    L.parser.info(`OK: ${quads.length} триплетов, префиксов: ${Object.keys(prefixes).length}`, 'N3.Parser');
+    if (quads.length === 0) {
+      L.parser.warn('Триплетов не найдено — проверьте, что файл содержит Turtle', 'N3.Parser');
+    }
+    return { quads, prefixes };
+  } catch (e) {
+    const msg = e.message + (e.line != null ? ` (строка ${e.line}, колонка ${e.column})` : '');
+    L.parser.error(msg, 'N3.Parser');
+    throw e;
+  }
+}
+
+function validateTurtle(text) {
+  try {
+    const r = parseTurtleStrict(text);
+    return { valid: true, message: `Turtle валиден: ${r.quads.length} триплетов` };
+  } catch (e) {
+    return { valid: false, message: `Ошибка Turtle: ${e.message}` };
+  }
+}
+
+// ============================================================
+// 5. ВАЛИДАЦИЯ SPARQL
+// ============================================================
+function validateSparql(text) {
+  if (!sparqljs) return { valid: false, message: 'sparqljs не загружен' };
+  try {
+    const parser = new sparqljs.Parser();
+    const parsed = parser.parse(text);
+    L.sparql.info(`SPARQL валиден: тип ${parsed.type || 'query'}`, 'sparqljs');
+    return { valid: true, message: `SPARQL валиден (тип: ${parsed.type || 'query'})` };
+  } catch (e) {
+    L.sparql.error(`SPARQL: ${e.message}`, 'sparqljs');
+    return { valid: false, message: `Ошибка SPARQL: ${e.message}` };
+  }
+}
+
+// ============================================================
+// 6. СЕРИАЛИЗАТОРЫ
+// ============================================================
+const RDF_TYPE   = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
+const XSD_STRING = 'http://www.w3.org/2001/XMLSchema#string';
 
 function termKey(t) {
   if (!t) return '';
@@ -34,82 +407,449 @@ function termKey(t) {
     case 'NamedNode': return 'N' + t.value;
     case 'BlankNode': return 'B' + t.value;
     case 'Literal':   return `L|${t.value}|${t.language}|${t.datatype?.value}`;
-    default:          return 'X' + t.value;
+    case 'DefaultGraph': return 'G';
+    default: return 'X' + t.value;
   }
 }
+const escapeLiteral = s => s.replace(/\\/g,'\\\\').replace(/"/g,'\\"')
+  .replace(/\n/g,'\\n').replace(/\r/g,'\\r').replace(/\t/g,'\\t');
 
-export function rdfToMarkdown(quads, prefixes = {}, options = {}) {
-  const { includeLiterals = true, title = 'RDF Graph' } = options;
-
-  // 1. Карта типов
-  const types = new Map();
-  for (const q of quads) {
-    if (q.predicate.value === RDF_TYPE && q.object.termType === 'NamedNode') {
-      types.set(termKey(q.subject), getLabel(q.object, prefixes));
-    }
+function abbreviateIRI(value, prefixes) {
+  let best = null;
+  for (const [pfx, iri] of Object.entries(prefixes)) {
+    if (value.startsWith(iri) && (!best || iri.length > best.iri.length)) best = { pfx, iri };
   }
+  if (best) {
+    const rest = value.slice(best.iri.length);
+    if (/^[A-Za-z_][\w.-]*$/.test(rest) || rest === '') return best.pfx + ':' + rest;
+  }
+  return null;
+}
+function termToString(t, { usePrefixes, prefixes }) {
+  switch (t.termType) {
+    case 'NamedNode': {
+      if (usePrefixes) { const a = abbreviateIRI(t.value, prefixes); if (a !== null) return a; }
+      return `<${t.value}>`;
+    }
+    case 'BlankNode': return '_:' + t.value;
+    case 'Literal': {
+      const lit = `"${escapeLiteral(t.value)}"`;
+      if (t.language) return `${lit}@${t.language}`;
+      if (t.datatype && t.datatype.value !== XSD_STRING)
+        return `${lit}^^${termToString(t.datatype, { usePrefixes, prefixes })}`;
+      return lit;
+    }
+    default: return `<${t.value}>`;
+  }
+}
+const predToString = (p, o) => (p.termType === 'NamedNode' && p.value === RDF_TYPE)
+  ? 'a' : termToString(p, o);
 
-  // 2. Группировка триплетов по субъекту
+function serializeTurtleCustom(quads, { usePrefixes, useGrouping, prefixes = {} }) {
+  L.serializer.info(`Turtle: prefixes=${usePrefixes}, grouping=${useGrouping}, quads=${quads.length}`, 'custom');
+  let out = '';
+  if (usePrefixes && Object.keys(prefixes).length) {
+    for (const [pfx, iri] of Object.entries(prefixes)) out += `@prefix ${pfx}: <${iri}> .\n`;
+    out += '\n';
+  }
+  if (quads.length === 0) {
+    out += '# Триплетов нет — проверьте исходный файл.\n';
+    return out;
+  }
   const subjects = new Map();
   for (const q of quads) {
     const sk = termKey(q.subject);
-    if (!subjects.has(sk)) {
-      subjects.set(sk, {
-        subject: q.subject,
-        label: getLabel(q.subject, prefixes),
-        type: types.get(sk) || 'Resource',
-        props: new Map(),
-      });
-    }
+    if (!subjects.has(sk)) subjects.set(sk, { subject: q.subject, predicates: new Map() });
     const s = subjects.get(sk);
     const pk = termKey(q.predicate);
-    if (!s.props.has(pk)) s.props.set(pk, { predicate: q.predicate, objects: [] });
-    s.props.get(pk).objects.push(q.object);
+    if (!s.predicates.has(pk)) s.predicates.set(pk, { predicate: q.predicate, objects: [] });
+    s.predicates.get(pk).objects.push(q.object);
   }
-
-  // 3. Группировка субъектов по типу
-  const byType = new Map();
-  for (const s of subjects.values()) {
-    if (!byType.has(s.type)) byType.set(s.type, []);
-    byType.get(s.type).push(s);
-  }
-
-  // 4. Генерация Markdown
-  let out = `# ${title}\n\n`;
-  out += `_Триплетов: ${quads.length}, субъектов: ${subjects.size}, типов: ${byType.size}._\n\n`;
-
-  const sortedTypes = [...byType.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-
-  for (const [type, list] of sortedTypes) {
-    out += `## Тип: ${type}\n\n`;
-
-    const sortedSubjects = [...list].sort((a, b) => a.label.localeCompare(b.label));
-
-    for (const s of sortedSubjects) {
-      out += `### \`${s.label}\`\n\n`;
-
-      const sortedPreds = [...s.props.entries()].sort((a, b) => {
-        const la = getLabel(a[1].predicate, prefixes);
-        const lb = getLabel(b[1].predicate, prefixes);
-        return la.localeCompare(lb);
-      });
-
-      for (const [, { predicate, objects }] of sortedPreds) {
-        if (predicate.value === RDF_TYPE) continue;
-
-        const pLabel = getLabel(predicate, prefixes);
-        const objs = objects
-          .filter(o => includeLiterals || o.termType !== 'Literal')
-          .map(o => `\`${getLabel(o, prefixes)}\``);
-
-        if (objs.length === 0) continue;
-
-        out += `- **${pLabel}**: ${objs.join(', ')}\n`;
+  const opts = { usePrefixes, prefixes };
+  for (const { subject, predicates } of subjects.values()) {
+    const subjStr = termToString(subject, opts);
+    if (useGrouping) {
+      const parts = [];
+      for (const { predicate, objects } of predicates.values()) {
+        parts.push(`${predToString(predicate, opts)} ${objects.map(o => termToString(o, opts)).join(', ')}`);
       }
-
+      out += `${subjStr} ${parts.join(' ;\n    ')} .\n\n`;
+    } else {
+      for (const { predicate, objects } of predicates.values()) {
+        for (const o of objects)
+          out += `${subjStr} ${predToString(predicate, opts)} ${termToString(o, opts)} .\n`;
+      }
       out += '\n';
     }
   }
-
   return out;
 }
+function serializeN3(quads, { format = 'N3', prefixes = {} } = {}) {
+  if (!N3) throw new Error('N3.js не загружен');
+  L.serializer.info(`формат ${format}`, 'N3.Writer');
+  return new Promise((res, rej) => {
+    const w = new N3.Writer({ format, prefixes });
+    w.addQuads(quads);
+    w.end((err, result) => err ? rej(err) : res(result));
+  });
+}
+const quadsToNQuads = quads => new Promise((res, rej) => {
+  const w = new N3.Writer({ format: 'N-Triples' });
+  w.addQuads(quads);
+  w.end((err, r) => err ? rej(err) : res(r));
+});
+async function serializeJSONLD(quads, mode, context = {}) {
+  if (!jsonld) throw new Error('jsonld не загружен');
+  L.serializer.info(`режим ${mode}`, 'jsonld');
+  const nq = await quadsToNQuads(quads);
+  const doc = await jsonld.fromRDF(nq, { format: 'application/n-quads' });
+  let result;
+  if (mode === 'expanded')       result = doc;
+  else if (mode === 'flattened') result = await jsonld.flatten(doc);
+  else                           result = await jsonld.compact(doc, context);
+  return JSON.stringify(result, null, 2);
+}
+async function serializeYamlLD(quads, context = {}) {
+  if (!jsonld || !yaml) throw new Error('jsonld или js-yaml не загружены');
+  L.serializer.info('YAML-LD', 'js-yaml + jsonld');
+  const nq = await quadsToNQuads(quads);
+  const doc = await jsonld.fromRDF(nq, { format: 'application/n-quads' });
+  const compacted = await jsonld.compact(doc, context);
+  return yaml.dump(compacted, { noRefs: true, lineWidth: 100 });
+}
+const prefixesToContext = p =>
+  Object.fromEntries(Object.entries(p).map(([k, v]) => [k === '' ? '@vocab' : k, v]));
+
+async function transform(quads, mode, prefixes = {}) {
+  switch (mode) {
+    case 'turtle-prefixes-compact':     return serializeTurtleCustom(quads, { usePrefixes:true,  useGrouping:true,  prefixes });
+    case 'turtle-prefixes-explicit':    return serializeTurtleCustom(quads, { usePrefixes:true,  useGrouping:false, prefixes });
+    case 'turtle-no-prefixes-compact':  return serializeTurtleCustom(quads, { usePrefixes:false, useGrouping:true,  prefixes });
+    case 'turtle-no-prefixes-explicit': return serializeTurtleCustom(quads, { usePrefixes:false, useGrouping:false, prefixes });
+    case 'n3-prefixes-compact':         return serializeN3(quads, { format: 'N3', prefixes });
+    case 'ntriples':                    return serializeN3(quads, { format: 'N-Triples' });
+    case 'jsonld-compact':              return serializeJSONLD(quads, 'compact', prefixesToContext(prefixes));
+    case 'jsonld-expanded':             return serializeJSONLD(quads, 'expanded');
+    case 'jsonld-flattened':            return serializeJSONLD(quads, 'flattened');
+    case 'yamlld':                      return serializeYamlLD(quads, prefixesToContext(prefixes));
+    case 'mermaid':
+      if (!rdfToMermaid) throw new Error('mermaid.js не загружен');
+      L.mermaid.info(`генерация Mermaid: quads=${quads.length}`);
+      return rdfToMermaid(quads, prefixes);
+    case 'markdown':
+      if (!rdfToMarkdown) throw new Error('markdown.js не загружен');
+      L.markdown.info(`генерация Markdown: quads=${quads.length}`);
+      return rdfToMarkdown(quads, prefixes);
+    default: throw new Error('Неизвестный режим: ' + mode);
+  }
+}
+
+// ============================================================
+// 7. SPARQL (Oxigraph)
+// ============================================================
+let store = null;
+let oxigraphReady = false;
+
+function loadStoreFromQuads(quads) {
+  if (!oxigraphReady) { L.sparql.warn('store не готов, пропуск', 'oxigraph'); return; }
+  try {
+    store = new oxigraph.Store();
+    for (const q of quads) store.add(q);
+    L.sparql.info(`загружено ${quads.length} quads`, 'oxigraph.Store');
+  } catch (e) {
+    L.sparql.error(e.message, 'oxigraph.Store');
+  }
+}
+function runQuery(query) {
+  if (!store) throw new Error('Store не инициализирован');
+  L.sparql.info(`query: ${query.slice(0,80).replace(/\s+/g,' ')}`, 'oxigraph.Store');
+  const result = store.query(query);
+
+  if (typeof result === 'boolean')
+    return { type:'ask', headers:['result'], rows:[{result: String(result)}] };
+
+  if (Array.isArray(result)) {
+    if (result.length === 0) {
+      return /^\s*(select|SELECT)/m.test(query)
+        ? { type:'select', headers:[], rows:[] }
+        : { type:'construct', headers:['subject','predicate','object'], rows:[] };
+    }
+    const first = result[0];
+    if (first && (first.subject || first.termType === 'Quad')) {
+      const rows = result.map(q => ({
+        subject: q.subject.value,
+        predicate: q.predicate.value,
+        object: q.object.termType === 'Literal'
+          ? `"${q.object.value}"${q.object.language ? '@'+q.object.language : ''}`
+          : q.object.value,
+      }));
+      return { type:'construct', headers:['subject','predicate','object'], rows };
+    }
+    const headers = new Set(), rows = [];
+    for (const b of result) {
+      const row = {};
+      const entries = b instanceof Map ? b.entries() : Object.entries(b);
+      for (const [k, v] of entries) {
+        headers.add(k);
+        row[k] = v == null ? '' : v.value;
+      }
+      rows.push(row);
+    }
+    return { type:'select', headers:[...headers], rows };
+  }
+  return { type:'other', headers:[], rows:[] };
+}
+function formatResultTable(res) {
+  if (!res.rows.length) return '(пустой результат)';
+  const widths = res.headers.map(h =>
+    Math.max(h.length, ...res.rows.map(r => String(r[h] ?? '').length)));
+  const sep = widths.map(w => '-'.repeat(w)).join('  ');
+  const head = res.headers.map((h, i) => h.padEnd(widths[i])).join('  ');
+  const body = res.rows.map(r =>
+    res.headers.map((h, i) => String(r[h] ?? '').padEnd(widths[i])).join('  ')).join('\n');
+  return `${head}\n${sep}\n${body}`;
+}
+function resultToCSV(res) {
+  const escv = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; };
+  return [res.headers.map(escv).join(','),
+    ...res.rows.map(r => res.headers.map(h => escv(r[h])).join(','))].join('\n');
+}
+
+// ============================================================
+// 8. HELP
+// ============================================================
+const HELP_MD = `# RDF Browser Toolkit — справка
+
+## Быстрый старт
+1. В поле **URL** окна Original вставьте ссылку на Turtle и нажмите **Загрузить**.
+2. В окне Format выберите режим преобразования.
+3. Для SPARQL загрузите \`.rq\` и нажмите **▶ Выполнить**.
+
+## <a id="adding-defaults"></a>Добавление в список «По умолчанию»
+1. Откройте \`files/defaults.json\`.
+2. Добавьте объект в массив \`rdf\` или \`sparql\`:
+   \`\`\`json
+   { "label": "Мой файл", "url": "files/my.ttl" }
+   \`\`\`
+3. Закоммитьте. После обновления страницы запись появится в списке.
+
+## Режимы Format
+- **Turtle** — четыре режима: с префиксами / без префиксов × компактно / явно.
+- **N3** — расширенный Turtle с префиксами.
+- **N-Triples** — построчно, без префиксов.
+- **JSON-LD** — compact / expanded / flattened.
+- **YAML-LD** — через compact JSON-LD → YAML.
+- **Mermaid** — граф \`flowchart TD\` с группировкой по типам (\`subgraph\`).
+- **Markdown** — заголовки \`#\`, \`##\`, \`###\` по типам и узлам, свойства — списком.
+
+## Валидация
+- **Turtle** проверяется через N3.Parser (синхронный API).
+- **SPARQL** проверяется через sparqljs.
+
+## Логические метки в Log
+Строки вида \`[parser.js]\`, \`[mermaid.js]\`, \`[markdown.js]\` — это ярлыки частей
+приложения. \`mermaid.js\` и \`markdown.js\` — действительно отдельные файлы-модули,
+остальные — логические метки внутри \`index.html\`.`;
+
+function mdToHtml(md) {
+  const lines = md.split('\n');
+  let html = '', inCode = false, inList = false, para = [];
+  const flush = () => { if (para.length) { html += `<p>${para.join(' ')}</p>`; para = []; } };
+  const closeList = () => { if (inList) { html += '</ul>'; inList = false; } };
+  const inline = s => s
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/`([^`]+)`/g,'<code>$1</code>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+  for (const raw of lines) {
+    if (raw.startsWith('```')) { flush(); closeList();
+      html += inCode ? '</code></pre>' : '<pre><code>'; inCode = !inCode; continue; }
+    if (inCode) { html += raw.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '\n'; continue; }
+    if (/^###\s+/.test(raw)) { flush(); closeList(); html += `<h3>${inline(raw.slice(4))}</h3>`; continue; }
+    if (/^##\s+/.test(raw))  { flush(); closeList(); html += `<h2>${inline(raw.slice(3))}</h2>`; continue; }
+    if (/^#\s+/.test(raw))   { flush(); closeList(); html += `<h1>${inline(raw.slice(2))}</h1>`; continue; }
+    if (/^[-*]\s+/.test(raw)) { flush();
+      if (!inList) { html += '<ul>'; inList = true; }
+      html += `<li>${inline(raw.slice(2))}</li>`; continue; }
+    if (raw.trim() === '') { flush(); closeList(); continue; }
+    para.push(inline(raw));
+  }
+  flush(); closeList();
+  return html;
+}
+
+// ============================================================
+// 9. СОСТОЯНИЕ
+// ============================================================
+const state = {
+  originalText:'', originalQuads:[], originalPrefixes:{},
+  formattedText:'', sparqlText:'', resultRows:null,
+  defaults: { rdf: [], sparql: [] }
+};
+
+function renderOriginal() { $('view-original').innerHTML = `<code>${highlight(state.originalText)}</code>`; }
+function renderSparql()   { $('view-sparql').innerHTML   = `<code>${highlight(state.sparqlText)}</code>`; }
+function renderFormat()   { $('view-format').innerHTML   = `<code>${highlight(state.formattedText)}</code>`; }
+
+// ============================================================
+// 10. ОСНОВНОЙ ПОТОК
+// ============================================================
+function setOriginalText(text) {
+  state.originalText = text;
+  renderOriginal();
+
+  let parsed;
+  try {
+    parsed = parseTurtleStrict(text);
+  } catch (e) {
+    state.originalQuads = [];
+    state.originalPrefixes = {};
+    $('view-format').innerHTML = `<code>Ошибка Turtle: ${esc(e.message)}</code>`;
+    return;
+  }
+
+  state.originalQuads = parsed.quads;
+  state.originalPrefixes = parsed.prefixes;
+  L.app.info(`Загружено: ${parsed.quads.length} триплетов, ${Object.keys(parsed.prefixes).length} префиксов`, 'validate');
+
+  loadStoreFromQuads(parsed.quads);
+  applyFormat();
+}
+
+async function applyFormat() {
+  const mode = $('sel-format').value;
+  try {
+    const out = await transform(state.originalQuads, mode, state.originalPrefixes);
+    state.formattedText = out;
+    renderFormat();
+    L.app.info(`format OK (${out.length} байт)`);
+  } catch (e) {
+    L.app.error(e.message, mode);
+    $('view-format').innerHTML = `<code>Ошибка: ${esc(e.message)}</code>`;
+  }
+}
+async function loadOriginalFromUrl(url) {
+  try { setOriginalText(await loadFromUrl(url)); }
+  catch (e) { L.app.error('loader: ' + e.message); }
+}
+async function loadSparqlFromUrl(url) {
+  try {
+    state.sparqlText = await loadFromUrl(url);
+    renderSparql();
+    const v = validateSparql(state.sparqlText);
+    L.app.info(v.message, 'validate');
+  } catch (e) { L.app.error('loader: ' + e.message); }
+}
+function runSparql() {
+  if (!state.sparqlText.trim()) { L.app.warn('SPARQL пуст'); return; }
+
+  const v = validateSparql(state.sparqlText);
+  if (!v.valid) {
+    $('view-result').innerHTML = `<code>${esc(v.message)}</code>`;
+    return;
+  }
+
+  try {
+    const res = runQuery(state.sparqlText);
+    state.resultRows = res;
+    $('view-result').innerHTML = `<code>${esc(formatResultTable(res))}</code>`;
+    L.app.info(`type=${res.type}, rows=${res.rows.length}`, 'sparql');
+  } catch (e) {
+    L.app.error(e.message, 'sparql');
+    $('view-result').innerHTML = `<code>Ошибка: ${esc(e.message)}</code>`;
+  }
+}
+
+// ============================================================
+// 11. INIT
+// ============================================================
+async function loadDefaults() {
+  try {
+    L.app.info('Загрузка files/defaults.json…', 'fetch');
+    const r = await fetch('files/defaults.json', { cache: 'no-store' });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    state.defaults = await r.json();
+    L.app.info(`defaults: rdf=${state.defaults.rdf?.length || 0}, sparql=${state.defaults.sparql?.length || 0}`, 'fetch');
+  } catch (e) {
+    L.app.warn('defaults.json: ' + e.message, 'fetch');
+    state.defaults = { rdf: [], sparql: [] };
+  }
+}
+function fillDefaultSelects() {
+  const add = (selId, list, kind) => {
+    const sel = $(selId);
+    list.forEach(item => {
+      const o = document.createElement('option');
+      o.value = item.url;
+      o.textContent = item.label || item.url;
+      sel.appendChild(o);
+    });
+    sel.addEventListener('change', e => {
+      const v = e.target.value;
+      if (!v || v.startsWith('—')) return;
+      if (kind === 'rdf') { $('url-original').value = v; loadOriginalFromUrl(v); }
+      else                { $('url-sparql').value = v;   loadSparqlFromUrl(v); }
+      e.target.selectedIndex = 0;
+    });
+  };
+  add('sel-default-original', state.defaults.rdf || [], 'rdf');
+  add('sel-default-sparql',   state.defaults.sparql || [], 'sparql');
+}
+function bindEvents() {
+  $('btn-help').addEventListener('click', () => {
+    $('help-body').innerHTML = mdToHtml(HELP_MD);
+    $('help-modal').classList.remove('hidden');
+  });
+  $('btn-help-close').addEventListener('click', () => $('help-modal').classList.add('hidden'));
+  $('help-modal').addEventListener('click', e => {
+    if (e.target.id === 'help-modal') $('help-modal').classList.add('hidden');
+  });
+
+  $('btn-load-url-original').addEventListener('click', () => loadOriginalFromUrl($('url-original').value));
+  $('btn-load-file-original').addEventListener('click', () => $('file-original').click());
+  $('file-original').addEventListener('change', async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try { setOriginalText(await loadFromFile(f)); }
+    catch (err) { L.app.error('FileReader: ' + err.message); }
+  });
+  $('btn-load-buffer-original').addEventListener('click', async () => {
+    try { setOriginalText(await readClipboard()); }
+    catch (e) { L.app.error('clipboard: ' + e.message); }
+  });
+  $('btn-copy-original').addEventListener('click', () => writeClipboard(state.originalText));
+
+  $('sel-format').addEventListener('change', applyFormat);
+  $('btn-copy-format').addEventListener('click', () => writeClipboard(state.formattedText));
+
+  $('btn-load-url-sparql').addEventListener('click', () => loadSparqlFromUrl($('url-sparql').value));
+  $('btn-load-buffer-sparql').addEventListener('click', async () => {
+    try { state.sparqlText = await readClipboard(); renderSparql(); }
+    catch (e) { L.app.error('clipboard: ' + e.message); }
+  });
+  $('btn-copy-sparql').addEventListener('click', () => writeClipboard(state.sparqlText));
+  $('btn-run-sparql').addEventListener('click', runSparql);
+
+  $('btn-copy-result').addEventListener('click', () => {
+    if (state.resultRows) writeClipboard(formatResultTable(state.resultRows));
+  });
+  $('btn-save-csv').addEventListener('click', () => {
+    if (!state.resultRows) return L.app.warn('Нет результата');
+    downloadFile('result.csv', resultToCSV(state.resultRows), 'text/csv;charset=utf-8');
+  });
+
+  $('btn-clear-log').addEventListener('click', () => { $('view-log').textContent = ''; });
+}
+async function init() {
+  L.app.info('─── init ───');
+  oxigraphReady = !!oxigraph;
+  await loadDefaults();
+  fillDefaultSelects();
+  bindEvents();
+  await loadOriginalFromUrl($('url-original').value);
+  await loadSparqlFromUrl($('url-sparql').value);
+  L.app.info('─── ready ───');
+}
+init().catch(e => L.app.error('init failed: ' + (e && e.message ? e.message : String(e))));
+</script>
+</body>
+</html>
