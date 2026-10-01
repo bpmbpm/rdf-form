@@ -1,4 +1,8 @@
 ## 1
+
+### info
+- https://github.com/bpmbpm/onto/blob/main/ver1/anchor_1.md
+
 Даю новый модуль `markdown.js` и четыре точечные правки в `index.html` — вместо того чтобы заново публиковать весь 800-строчный HTML.
 
 ---
